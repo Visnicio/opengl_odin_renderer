@@ -46,26 +46,38 @@ main :: proc() {
     gl.GenVertexArrays(1, &VAO)
     gl.BindVertexArray(VAO)
 
-    EBO: u32
-    gl.GenBuffers(1, &EBO)
-    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, EBO)
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(triangle_indices) * size_of(u32), raw_data(triangle_indices), gl.STATIC_DRAW)
-
+    
     // VBO (Vertex Buffer Object): objeto que representa um buffer alocado na VRAM da GPU.
     // Armazena dados de vértices (posição, normal, UV, cor, etc.) diretamente na memória da GPU,
     // evitando transferências repetidas a cada frame.
     VBO: u32
     gl.GenBuffers(1, &VBO) // aloca o buffer object na GPU e retorna seu ID único
-
+    
     // Vincula o VBO ao target ARRAY_BUFFER no estado global do OpenGL.
     // OpenGL opera como uma máquina de estados: todas as operações subsequentes sobre
     // ARRAY_BUFFER afetarão este VBO até que outro seja vinculado ou o target seja desvinculado.
     gl.BindBuffer(gl.ARRAY_BUFFER, VBO)
-
+    
     // Carrega os dados de vértices para o buffer atualmente vinculado ao ARRAY_BUFFER.
     // O último argumento define o padrão de uso: STATIC_DRAW (escrito uma vez, lido muitas vezes),
     // DYNAMIC_DRAW (atualizado frequentemente) ou STREAM_DRAW (escrito e lido uma única vez).
     gl.BufferData(gl.ARRAY_BUFFER, len(triangle_vertices) * size_of(f32), raw_data(triangle_vertices), gl.STATIC_DRAW)
+    
+    EBO: u32
+    gl.GenBuffers(1, &EBO)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, EBO)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(triangle_indices) * size_of(u32), raw_data(triangle_indices), gl.STATIC_DRAW)
+
+
+    // params, in order
+    // first  (0) is the location of the vertex attribute in the shader (layout(location = 0))
+    // second (3) is the number of components per vertex attribute (vec3 = 3)
+    // third  (gl.FLOAT) is the data type of each component
+    // fourth (gl.FALSE) specifies whether fixed-point data values should be normalized (true) or converted directly as integers (false) when accessed
+    // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
+    // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
+    gl.EnableVertexAttribArray(0)
 
     vertex_shader: cstring = `#version 330 core
     layout (location = 0) in vec3 aPos;
@@ -121,17 +133,6 @@ main :: proc() {
 
     gl.DeleteShader(vertex_shader_comp)
     gl.DeleteShader(frag_shader_comp)
-
-    // params, in order
-    // first  (0) is the location of the vertex attribute in the shader (layout(location = 0))
-    // second (3) is the number of components per vertex attribute (vec3 = 3)
-    // third  (gl.FLOAT) is the data type of each component
-    // fourth (gl.FALSE) specifies whether fixed-point data values should be normalized (true) or converted directly as integers (false) when accessed
-    // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
-    // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
-    gl.EnableVertexAttribArray(0)
-   
 
 
     for !glfw.WindowShouldClose(window){
