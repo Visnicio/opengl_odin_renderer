@@ -11,9 +11,15 @@ main :: proc() {
 
 
     triangle_vertices: []f32 = {
-        -0.5, -0.5, 0.0,
-        0.5, -0.5, 0.0,
-        0.0,  0.5, 0.0
+        0.5,  0.5, 0.0,  // top right
+        0.5, -0.5, 0.0,  // bottom right
+        -0.5, -0.5, 0.0,  // bottom left
+        -0.5,  0.5, 0.0   // top left 
+    }
+
+    triangle_indices: []u32 = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
     }
 
 
@@ -39,6 +45,11 @@ main :: proc() {
     VAO: u32
     gl.GenVertexArrays(1, &VAO)
     gl.BindVertexArray(VAO)
+
+    EBO: u32
+    gl.GenBuffers(1, &EBO)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, EBO)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(triangle_indices) * size_of(u32), raw_data(triangle_indices), gl.STATIC_DRAW)
 
     // VBO (Vertex Buffer Object): objeto que representa um buffer alocado na VRAM da GPU.
     // Armazena dados de vértices (posição, normal, UV, cor, etc.) diretamente na memória da GPU,
@@ -139,7 +150,9 @@ main :: proc() {
 
         gl.UseProgram(shader_pogram)
         gl.BindVertexArray(VAO)
-        gl.DrawArrays(gl.TRIANGLES, 0, 3)
+        // gl.DrawArrays(gl.TRIANGLES, 0, 3)
+        gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, EBO)
+        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
         glfw.SwapBuffers(window)
     }
