@@ -160,7 +160,7 @@ main :: proc() {
     defer delete(triangle_two_vertices)
 
     wireframe: bool = false
-
+    triangles_color: [3]f32 = {0,0,0}
     
     // ------- Engine
     
@@ -241,7 +241,7 @@ main :: proc() {
 
         ourColorLocation := gl.GetUniformLocation(orange_shader.shader_program, "ourColor")
         gl.UseProgram(orange_shader.shader_program)
-        gl.Uniform4f(ourColorLocation, 1.0, 1.0, 1.0, 1.0)
+        gl.Uniform4f(ourColorLocation, triangles_color.x, triangles_color.y, triangles_color.z, 1.0) // swizilling is pretty cool
         gl.BindVertexArray(orange_triangle.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
@@ -254,12 +254,13 @@ main :: proc() {
 
         // draw yellow triangle
         gl.UseProgram(yellow_shader.shader_program)
-        gl.Uniform4f(ourColorLocation, 1.0, 1.0, 1.0, 1.0)
+        gl.Uniform4f(ourColorLocation, triangles_color.x, triangles_color.y, triangles_color.z, 1.0)
         gl.BindVertexArray(triangle_two.VAO)
         gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
         // ---- IMGUI RENDER
         imgui.begin("test panel")
+        imgui.color_picker3("triangle colors", &triangles_color)
         imgui.end()
 
 
