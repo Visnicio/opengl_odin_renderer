@@ -192,8 +192,10 @@ main :: proc() {
     
     // imgui.open
     imgui_glfw.init_for_open_gl(window, true)
+    defer imgui_glfw.shutdown()
     imgui_gl.init("#version 330")
-
+    defer imgui_gl.shutdown()
+    defer imgui.destroy_context()
 
     orange_triangle: ^Triangle = triangle_create(triangle_vertices, {})
     defer free(orange_triangle) // defers the freeing when we go out of scope (ending program in this case)
@@ -201,11 +203,11 @@ main :: proc() {
     defer free(triangle_two)
 
     // shader
-    orange_shader: ^Shader = shader_create("default.vert", "default.frag")
+    orange_shader: ^Shader = shader_create("default.vert", "triangle.frag")
     defer gl.DeleteProgram(orange_shader.shader_program)
     defer free(orange_shader)
 
-    yellow_shader: ^Shader = shader_create("default.vert", "yellow.frag")
+    yellow_shader: ^Shader = shader_create("default.vert", "triangle.frag")
     defer gl.DeleteProgram(yellow_shader.shader_program)
     defer free(yellow_shader)
 
@@ -237,7 +239,9 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
+        ourColorLocation := gl.GetUniformLocation(orange_shader.shader_program, "ourColor")
         gl.UseProgram(orange_shader.shader_program)
+        gl.Uniform4f(ourColorLocation, 1.0, 1.0, 1.0, 1.0)
         gl.BindVertexArray(orange_triangle.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
@@ -250,10 +254,15 @@ main :: proc() {
 
         // draw yellow triangle
         gl.UseProgram(yellow_shader.shader_program)
+        gl.Uniform4f(ourColorLocation, 1.0, 1.0, 1.0, 1.0)
         gl.BindVertexArray(triangle_two.VAO)
         gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
-        imgui.show_demo_window()
+        // ---- IMGUI RENDER
+        imgui.begin("test panel")
+        imgui.end()
+
+
         imgui.render()
         imgui_gl.render_draw_data(imgui.get_draw_data())
 
@@ -268,9 +277,6 @@ main :: proc() {
     defer glfw.DestroyWindow(window)
     defer glfw.Terminate()
 
-    imgui_gl.shutdown()
-    imgui_glfw.shutdown()
-    imgui.destroy_context()
 }
 
 engine_init :: proc() {
