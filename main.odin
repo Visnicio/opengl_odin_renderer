@@ -10,6 +10,10 @@ import gl "vendor:OpenGL"
 import "core:os"
 import "core:strings"
 
+import imgui "odin-imgui"
+import imgui_gl "odin-imgui/imgui_impl_opengl3"
+import imgui_glfw "odin-imgui/imgui_impl_glfw"
+
 
 Triangle :: struct {
     VAO: u32, // VAO are like pipelines, hold instructions on how to get the mesh data
@@ -157,10 +161,11 @@ main :: proc() {
 
     wireframe: bool = false
 
+    
     // ------- Engine
-
+    
     engine_init()
-
+    
     window: glfw.WindowHandle = glfw.CreateWindow(800, 600, "OpenGL renderer", nil, nil)
 
     if window == nil {
@@ -172,6 +177,22 @@ main :: proc() {
     glfw.MakeContextCurrent(window)
     gl.load_up_to(int(3), 3, glfw.gl_set_proc_address) 
     gl.Viewport(0,0, 800, 600)
+
+    // ---- IMGUI
+    imgui.CHECKVERSION()
+    imgui.create_context()
+    io := imgui.get_io()
+    // if io == nil {
+    //     fmt.eprint("Could not locate ImGUI IO")
+    //     return
+    // }
+    io.config_flags |= {.Nav_Enable_Keyboard}
+    // // io.config_flags |= {.Nav_Enable_Keyboard}
+    io.config_flags |= {.Docking_Enable}
+    
+    // imgui.open
+    imgui_glfw.init_for_open_gl(window, true)
+    imgui_gl.init("#version 330")
 
 
     orange_triangle: ^Triangle = triangle_create(triangle_vertices, {})
@@ -191,6 +212,9 @@ main :: proc() {
 
     for !glfw.WindowShouldClose(window){
         glfw.PollEvents()
+        imgui_gl.new_frame()
+        imgui_glfw.new_frame()
+        imgui.new_frame()
 
         if glfw.GetKey(window, glfw.KEY_ESCAPE) == glfw.PRESS {
             glfw.SetWindowShouldClose(window, true)
@@ -229,6 +253,10 @@ main :: proc() {
         gl.BindVertexArray(triangle_two.VAO)
         gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
+        imgui.show_demo_window()
+        imgui.render()
+        imgui_gl.render_draw_data(imgui.get_draw_data())
+
         glfw.SwapBuffers(window)
     }
 
@@ -239,6 +267,10 @@ main :: proc() {
 
     defer glfw.DestroyWindow(window)
     defer glfw.Terminate()
+
+    imgui_gl.shutdown()
+    imgui_glfw.shutdown()
+    imgui.destroy_context()
 }
 
 engine_init :: proc() {
