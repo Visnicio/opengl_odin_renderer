@@ -201,11 +201,11 @@ main :: proc() {
     defer free(triangle_two)
 
     // shader
-    orange_shader: ^Shader = shader_create("default.vert", "triangle.frag")
+    orange_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
     defer gl.DeleteProgram(orange_shader.shader_program)
     defer free(orange_shader)
 
-    yellow_shader: ^Shader = shader_create("default.vert", "triangle.frag")
+    yellow_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
     defer gl.DeleteProgram(yellow_shader.shader_program)
     defer free(yellow_shader)
 
