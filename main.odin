@@ -23,6 +23,13 @@ Triangle :: struct {
     EBO: u32
 }
 
+Quad :: struct {
+    vertices: []f32,
+    VAO: u32,
+    VBO: u32,
+    EBO: u32
+}
+
 Shader :: struct {
     shader_program: u32 // used to bind to rendering
 }
@@ -68,6 +75,43 @@ triangle_create :: proc(vertices: []f32, indices: []u32) -> ^Triangle {
     gl.EnableVertexAttribArray(0)
 
     return new_triangle
+}
+
+quad_create :: proc(vertices: []f32, indices: []u32) -> ^Quad {
+    new_quad := new(Quad) // ALLOCATES ON HEAP, NEED TO FREE LATER
+    gl.GenVertexArrays(1, &new_quad.VAO)
+
+    gl.BindVertexArray(new_quad.VAO) // binds to configure
+
+    gl.GenBuffers(1, &new_quad.VBO)
+    // Vincula o VBO ao target ARRAY_BUFFER no estado global do OpenGL.
+    // OpenGL opera como uma máquina de estados: todas as operações subsequentes sobre
+    // ARRAY_BUFFER afetarão este VBO até que outro seja vinculado ou o target seja desvinculado.
+    gl.BindBuffer(gl.ARRAY_BUFFER, new_quad.VBO)
+    
+    // Carrega os dados de vértices para o buffer atualmente vinculado ao ARRAY_BUFFER.
+    // O último argumento define o padrão de uso: STATIC_DRAW (escrito uma vez, lido muitas vezes),
+    // DYNAMIC_DRAW (atualizado frequentemente) ou STREAM_DRAW (escrito e lido uma única vez).
+    gl.BufferData(gl.ARRAY_BUFFER, len(vertices) * size_of(f32), raw_data(vertices), gl.STATIC_DRAW)
+
+
+    gl.GenBuffers(1, &new_quad.EBO)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, new_quad.EBO)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices) * size_of(u32), raw_data(indices), gl.STATIC_DRAW)
+
+
+    // Attach eveything to the VAO
+    // params, in order
+    // first  (0) is the location of the vertex attribute in the shader (layout(location = 0))
+    // second (3) is the number of components per vertex attribute (vec3 = 3)
+    // third  (gl.FLOAT) is the data type of each component
+    // fourth (gl.FALSE) specifies whether fixed-point data values should be normalized (true) or converted directly as integers (false) when accessed
+    // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
+    // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
+    gl.EnableVertexAttribArray(0)
+
+    return new_quad
 }
 
 shader_create :: proc(vertex_path: string, fragment_path: string) -> ^Shader {
@@ -152,32 +196,32 @@ main :: proc() {
     fmt.println("Hello, World!");
 
 
-    // triangle_vertices: []f32 = {
-    //     0.5,  0.5, 0.0,  // top right
-    //     0.5, -0.5, 0.0,  // bottom right
-    //     -0.5, -0.5, 0.0,  // bottom left
-    //     -0.5,  0.5, 0.0   // top left 
-    // }
+    quad_vertices: []f32 = {
+        0.5,  0.5, 0.0,  // top right
+        0.5, -0.5, 0.0,  // bottom right
+        -0.5, -0.5, 0.0,  // bottom left
+        -0.5,  0.5, 0.0   // top left 
+    }
 
-    // triangle_indices: []u32 = {
-    //     0, 1, 3, // first triangle
-    //     1, 2, 3  // second triangle
-    // }
+    quad_indices: []u32 = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+    }
 
     // size is not known at compile time, so its a slice, defer the freeing
-    triangle_vertices: []f32 = {
-        -0.1,  0.2, 0.0,  // top
-        0.0, -0.1, 0.0,  // bottom right
-        -0.2, -0.1, 0.0,  // bottom left
-    } 
-    defer delete(triangle_vertices) // free for objects and structs, delete for slices and string (buffers of data)
+    // triangle_vertices: []f32 = {
+    //     -0.1,  0.2, 0.0,  // top
+    //     0.0, -0.1, 0.0,  // bottom right
+    //     -0.2, -0.1, 0.0,  // bottom left
+    // } 
+    // defer delete(triangle_vertices) // free for objects and structs, delete for slices and string (buffers of data)
 
-    triangle_two_vertices: []f32 = {
-        0.1,  0.2, 0.0,  // top
-        0.0, -0.1, 0.0,  // bottom right
-        0.2, -0.1, 0.0,  // bottom left
-    }
-    defer delete(triangle_two_vertices)
+    // triangle_two_vertices: []f32 = {
+    //     0.1,  0.2, 0.0,  // top
+    //     0.0, -0.1, 0.0,  // bottom right
+    //     0.2, -0.1, 0.0,  // bottom left
+    // }
+    // defer delete(triangle_two_vertices)
 
     wireframe: bool = false
     triangles_color: [3]f32 = {0,0,0}
@@ -203,10 +247,8 @@ main :: proc() {
     imgui_gl.init("#version 330")
 
 
-    orange_triangle: ^Triangle = triangle_create(triangle_vertices, {})
-    defer free(orange_triangle) // defers the freeing when we go out of scope (ending program in this case)
-    triangle_two: ^Triangle = triangle_create(triangle_two_vertices, {})
-    defer free(triangle_two)
+    quad: ^Quad = quad_create(quad_vertices, quad_indices)
+    defer free(quad)
 
     // shader
     triangle_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
@@ -269,21 +311,15 @@ main :: proc() {
         shader_set_matrix4f(triangle_shader, "projection", &projection)
 
         // draw left triangle
-        gl.BindVertexArray(orange_triangle.VAO)
+        gl.BindVertexArray(quad.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
         //   mode:  Specifies the kind of primitive to render (e.g. GL_TRIANGLES, GL_LINES, GL_POINTS ...)
         //   first: Specifies the starting index in the enabled arrays.
         //   count: Specifies the number of vertices to render.
-        gl.DrawArrays(gl.TRIANGLES, 0, 3)
-        // gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, orange_triangle.EBO)
-        // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
-
-        // draw yellow triangle
-        // transformLocation := gl.GetUniformLocation(orange_shader.shader_program, "transform")
-        // gl.UniformMatrix4fv(transformLocation, 1, gl.FALSE, linalg.to_ptr(&trans))
-        gl.BindVertexArray(triangle_two.VAO)
-        gl.DrawArrays(gl.TRIANGLES, 0, 3)
+        // gl.DrawArrays(gl.TRIANGLES, 0, 3)
+        gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, quad.EBO)
+        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
         // ---- IMGUI RENDER
         imgui.begin("test panel")
@@ -298,9 +334,12 @@ main :: proc() {
 
     }
 
-    gl.DeleteVertexArrays(1, &orange_triangle.VAO)
-    gl.DeleteBuffers(1, &orange_triangle.VBO)
-    gl.DeleteBuffers(1, &orange_triangle.EBO)
+    // gl.DeleteVertexArrays(1, &orange_triangle.VAO)
+    // gl.DeleteBuffers(1, &orange_triangle.VBO)
+    // gl.DeleteBuffers(1, &orange_triangle.EBO)
+    gl.DeleteVertexArrays(1, &quad.VAO)
+    gl.DeleteBuffers(1, &quad.VBO)
+    gl.DeleteBuffers(1, &quad.EBO)
 
     engine_cleanup()
 }
