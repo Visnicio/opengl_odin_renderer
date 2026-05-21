@@ -14,6 +14,8 @@ import imgui "odin-imgui"
 import imgui_gl "odin-imgui/imgui_impl_opengl3"
 import imgui_glfw "odin-imgui/imgui_impl_glfw"
 
+Mat4 :: linalg.Matrix4f32
+Vec3 :: linalg.Vector3f32
 
 Triangle :: struct {
     VAO: u32, // VAO are like pipelines, hold instructions on how to get the mesh data
@@ -129,6 +131,12 @@ shader_set_uniform4f :: proc(shader: ^Shader, uniform_name: string, value: [3]f3
     gl.Uniform4f(uniformLocation, value.x, value.y, value.z, 1.0) // swizilling is pretty cool
 }
 
+shader_set_matrix4f :: proc(shader: ^Shader, matrix_uniform_name: string, value: ^Mat4) {
+    uniformLocation := gl.GetUniformLocation(shader.shader_program, strings.clone_to_cstring((matrix_uniform_name)))
+    gl.UseProgram(shader.shader_program)
+    gl.UniformMatrix4fv(uniformLocation, 1, gl.FALSE, linalg.to_ptr(value))
+}
+
 // whenver we return string, structs or slices, they are allocated on the heap, we need to manually free them later
 // read_all_from_file :: proc(filepath: string) -> string {
 //     data, ok := os.read_entire_file(filepath, context.allocator)
@@ -201,13 +209,9 @@ main :: proc() {
     defer free(triangle_two)
 
     // shader
-    orange_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
-    defer gl.DeleteProgram(orange_shader.shader_program)
-    defer free(orange_shader)
-
-    yellow_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
-    defer gl.DeleteProgram(yellow_shader.shader_program)
-    defer free(yellow_shader)
+    triangle_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
+    defer gl.DeleteProgram(triangle_shader.shader_program)
+    defer free(triangle_shader)
 
     // MATH shi
     // vector : linalg.Vector4f32 = {1.0, 0.0, 0.0, 1.0} // I should typedef this Vec3 :: linalg.Vector3f32 Mat4 :: linalg.Matrix4f32
@@ -215,9 +219,18 @@ main :: proc() {
     // translation = linalg.matrix4_translate(linalg.Vector3f32{1.0, 1.0, 0.0})
     // fmt.printf("%v\n", translation)
 
-    trans := linalg.MATRIX4F32_IDENTITY
-    trans = linalg.matrix4_rotate_f32(math.to_radians(f32(90.0)), linalg.Vector3f32{0.0, 0.0, 1.0})
-    trans = linalg.matrix4_scale_f32(linalg.Vector3f32{0.5, 0.5, 0.5})
+    // trans := linalg.MATRIX4F32_IDENTITY
+    // trans = linalg.matrix4_rotate_f32(math.to_radians(f32(90.0)), linalg.Vector3f32{0.0, 0.0, 1.0})
+    // trans = linalg.matrix4_scale_f32(linalg.Vector3f32{0.5, 0.5, 0.5})
+
+    model_matrix: Mat4 = linalg.MATRIX4F32_IDENTITY // initialize identity matrix
+    model_matrix = linalg.matrix4_rotate(math.to_radians(f32(-55)), linalg.Vector3f32{1.0, 0.0, 0.0})
+    
+    view_matrix: Mat4 = linalg.MATRIX4F32_IDENTITY
+    view_translation: Vec3 = {0.0, 0.0, -3.0} // we can use our typedefs
+    view_matrix = linalg.matrix4_translate(view_translation)
+    
+    projection : Mat4 = linalg.matrix4_perspective(math.to_radians(f32(45.0)), 800.0/600.0, 0.1, 100.0)
 
     for !glfw.WindowShouldClose(engine_state.window){
         glfw.PollEvents()
@@ -237,6 +250,9 @@ main :: proc() {
             fmt.printfln("W")
         }
 
+        up_vec: Vec3 = {0.5, 1, 0}
+        model_matrix = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), up_vec)
+
         gl.ClearColor(0.2, 0.3, 0.3, 1.0)
         gl.Clear(gl.COLOR_BUFFER_BIT)
 
@@ -246,10 +262,13 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
-        gl.UseProgram(orange_shader.shader_program)
-        shader_set_uniform4f(orange_shader, "ourColor", triangles_color)
+        gl.UseProgram(triangle_shader.shader_program)
+        shader_set_uniform4f(triangle_shader, "ourColor", triangles_color)
+        shader_set_matrix4f(triangle_shader, "model", &model_matrix)
+        shader_set_matrix4f(triangle_shader, "view", &view_matrix)
+        shader_set_matrix4f(triangle_shader, "projection", &projection)
 
-        
+        // draw left triangle
         gl.BindVertexArray(orange_triangle.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
@@ -261,11 +280,8 @@ main :: proc() {
         // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
         // draw yellow triangle
-        gl.UseProgram(yellow_shader.shader_program)
-        shader_set_uniform4f(orange_shader, "ourColor", triangles_color)
-        transformLocation := gl.GetUniformLocation(orange_shader.shader_program, "transform")
-        gl.UniformMatrix4fv(transformLocation, 1, gl.FALSE, linalg.to_ptr(&trans))
-
+        // transformLocation := gl.GetUniformLocation(orange_shader.shader_program, "transform")
+        // gl.UniformMatrix4fv(transformLocation, 1, gl.FALSE, linalg.to_ptr(&trans))
         gl.BindVertexArray(triangle_two.VAO)
         gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
