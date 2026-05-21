@@ -14,6 +14,8 @@ import imgui "odin-imgui"
 import imgui_gl "odin-imgui/imgui_impl_opengl3"
 import imgui_glfw "odin-imgui/imgui_impl_glfw"
 
+import stb_image "vendor:stb/image"
+
 Mat4 :: linalg.Matrix4f32
 Vec3 :: linalg.Vector3f32
 
@@ -108,8 +110,13 @@ quad_create :: proc(vertices: []f32, indices: []u32) -> ^Quad {
     // fourth (gl.FALSE) specifies whether fixed-point data values should be normalized (true) or converted directly as integers (false) when accessed
     // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
     // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), 0)
+    // attrib 0: posição (xyz) — 3 floats, stride 5 floats, offset 0
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 5 * size_of(f32), 0)
     gl.EnableVertexAttribArray(0)
+
+    // attrib 1: UV (uv) — 2 floats, mesmo stride, offset de 3 floats (pula a posição)
+    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 5 * size_of(f32), uintptr(3 * size_of(f32)))
+    gl.EnableVertexAttribArray(1)
 
     return new_quad
 }
@@ -181,6 +188,12 @@ shader_set_matrix4f :: proc(shader: ^Shader, matrix_uniform_name: string, value:
     gl.UniformMatrix4fv(uniformLocation, 1, gl.FALSE, linalg.to_ptr(value))
 }
 
+shader_set_int :: proc(shader: ^Shader, uniform_name: string, value: i32) {
+    uniformLocation := gl.GetUniformLocation(shader.shader_program, strings.clone_to_cstring((uniform_name)))
+    gl.UseProgram(shader.shader_program)
+    gl.Uniform1i(uniformLocation, value)
+}
+
 // whenver we return string, structs or slices, they are allocated on the heap, we need to manually free them later
 // read_all_from_file :: proc(filepath: string) -> string {
 //     data, ok := os.read_entire_file(filepath, context.allocator)
@@ -195,17 +208,33 @@ shader_set_matrix4f :: proc(shader: ^Shader, matrix_uniform_name: string, value:
 main :: proc() {
     fmt.println("Hello, World!");
 
+    stb_image.set_flip_vertically_on_load(1)
 
-    quad_vertices: []f32 = {
-        0.5,  0.5, 0.0,  // top right
-        0.5, -0.5, 0.0,  // bottom right
-        -0.5, -0.5, 0.0,  // bottom left
-        -0.5,  0.5, 0.0   // top left 
+    // quad_vertices: []f32 = {
+    //     // positions          // colors           // texture coords
+    //     0.5,  0.5, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   // top right
+    //     0.5, -0.5, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   // bottom right
+    //     -0.5, -0.5, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   // bottom left
+    //     -0.5,  0.5, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0    // top left 
+    // }
+     quad_vertices: []f32 = {
+        // positions          // texture coords
+        0.5,  0.5, 0.0,      1.0, 1.0,   // top right
+        0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
+        -0.5, -0.5, 0.0,      0.0, 0.0,   // bottom left
+        -0.5,  0.5, 0.0,      0.0, 1.0    // top left 
     }
 
     quad_indices: []u32 = {
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
+    }
+
+    quad_tex_coords: []f32 = {
+        1.0, 1.0, // top right
+        1.0, 0.0, // bottom right
+        0.0, 0.0, // bottom left
+        0.0, 1.0  // top left
     }
 
     // size is not known at compile time, so its a slice, defer the freeing
@@ -274,6 +303,44 @@ main :: proc() {
     
     projection : Mat4 = linalg.matrix4_perspective(math.to_radians(f32(45.0)), 800.0/600.0, 0.1, 100.0)
 
+
+    // TEXTURE
+    // Os bytes da imagem são carregados da CPU pra GPU via TexImage2D.
+    // Depois disso, a CPU não precisa mais dos dados — só o ID da textura importa.
+    image_w, image_h, nr_channels: i32
+    data := stb_image.load("textures/y2k_ground_2.png", &image_w, &image_h, &nr_channels, 0)
+
+    texture: u32
+    gl.GenTextures(1, &texture)
+    gl.BindTexture(gl.TEXTURE_2D, texture)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, image_w, image_h, 0, gl.RGB, gl.UNSIGNED_BYTE, data) // envia os bytes pra GPU
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+    stb_image.image_free(data) // bytes na CPU podem ser liberados, a GPU já tem sua cópia
+
+    data = stb_image.load("textures/awesomeface.png", &image_w, &image_h, &nr_channels, 0)
+    awesome_face_texture: u32
+    gl.GenTextures(1, &awesome_face_texture)
+    gl.BindTexture(gl.TEXTURE_2D, awesome_face_texture)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, image_w, image_h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data) // envia os bytes pra GPU
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+    stb_image.image_free(data)
+
+    // O sampler2D no shader não recebe pixels — recebe um índice de texture unit (slot).
+    // Aqui dizemos: "quando o shader pedir 'ourTexture', leia do slot 0; 'awesomeTexture', do slot 1".
+    // Isso só precisa ser feito uma vez, não a cada frame.
+    gl.UseProgram(triangle_shader.shader_program)
+    shader_set_int(triangle_shader, "ourTexture", 0)
+    shader_set_int(triangle_shader, "awesomeTexture", 1)
+
+
     for !glfw.WindowShouldClose(engine_state.window){
         glfw.PollEvents()
         imgui_gl.new_frame()
@@ -310,7 +377,16 @@ main :: proc() {
         shader_set_matrix4f(triangle_shader, "view", &view_matrix)
         shader_set_matrix4f(triangle_shader, "projection", &projection)
 
-        // draw left triangle
+        // A cada frame, colocamos cada textura no slot correto antes de desenhar.
+        // ActiveTexture seleciona qual slot estamos configurando.
+        // BindTexture coloca a textura nesse slot.
+        // O shader então lê de cada slot pelo índice definido nos uniforms acima.
+        gl.ActiveTexture(gl.TEXTURE0)
+        gl.BindTexture(gl.TEXTURE_2D, texture)
+
+        gl.ActiveTexture(gl.TEXTURE1)
+        gl.BindTexture(gl.TEXTURE_2D, awesome_face_texture)
+
         gl.BindVertexArray(quad.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
