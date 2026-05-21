@@ -1,14 +1,14 @@
 package main
 
-import "core:terminal/ansi"
+import "core:math"
 import "core:fmt"
-import "base:runtime"
-import "vendor:glfw"
-import gl "vendor:OpenGL" 
-
-
 import "core:os"
 import "core:strings"
+import "base:runtime"
+import "core:math/linalg"
+
+import "vendor:glfw"
+import gl "vendor:OpenGL" 
 
 import imgui "odin-imgui"
 import imgui_gl "odin-imgui/imgui_impl_opengl3"
@@ -24,6 +24,12 @@ Triangle :: struct {
 Shader :: struct {
     shader_program: u32 // used to bind to rendering
 }
+
+EngineState :: struct {
+    window: glfw.WindowHandle
+}
+
+engine_state: EngineState
 
 triangle_create :: proc(vertices: []f32, indices: []u32) -> ^Triangle {
     new_triangle := new(Triangle) // ALLOCATES ON HEAP, NEED TO FREE LATER
@@ -117,6 +123,12 @@ shader_create :: proc(vertex_path: string, fragment_path: string) -> ^Shader {
     return new_shader
 }
 
+shader_set_uniform4f :: proc(shader: ^Shader, uniform_name: string, value: [3]f32) {
+    uniformLocation := gl.GetUniformLocation(shader.shader_program, strings.clone_to_cstring((uniform_name)))
+    gl.UseProgram(shader.shader_program)
+    gl.Uniform4f(uniformLocation, value.x, value.y, value.z, 1.0) // swizilling is pretty cool
+}
+
 // whenver we return string, structs or slices, they are allocated on the heap, we need to manually free them later
 // read_all_from_file :: proc(filepath: string) -> string {
 //     data, ok := os.read_entire_file(filepath, context.allocator)
@@ -166,18 +178,6 @@ main :: proc() {
     
     engine_init()
     
-    window: glfw.WindowHandle = glfw.CreateWindow(800, 600, "OpenGL renderer", nil, nil)
-
-    if window == nil {
-        fmt.printfln("Could not create window")
-        glfw.Terminate();
-        return
-    }
-
-    glfw.MakeContextCurrent(window)
-    gl.load_up_to(int(3), 3, glfw.gl_set_proc_address) 
-    gl.Viewport(0,0, 800, 600)
-
     // ---- IMGUI
     imgui.CHECKVERSION()
     imgui.create_context()
@@ -191,11 +191,9 @@ main :: proc() {
     io.config_flags |= {.Docking_Enable}
     
     // imgui.open
-    imgui_glfw.init_for_open_gl(window, true)
-    defer imgui_glfw.shutdown()
+    imgui_glfw.init_for_open_gl(engine_state.window, true)
     imgui_gl.init("#version 330")
-    defer imgui_gl.shutdown()
-    defer imgui.destroy_context()
+
 
     orange_triangle: ^Triangle = triangle_create(triangle_vertices, {})
     defer free(orange_triangle) // defers the freeing when we go out of scope (ending program in this case)
@@ -211,22 +209,31 @@ main :: proc() {
     defer gl.DeleteProgram(yellow_shader.shader_program)
     defer free(yellow_shader)
 
+    // MATH shi
+    // vector : linalg.Vector4f32 = {1.0, 0.0, 0.0, 1.0} // I should typedef this Vec3 :: linalg.Vector3f32 Mat4 :: linalg.Matrix4f32
+    // translation := linalg.MATRIX4F32_IDENTITY // initialize identity matrix
+    // translation = linalg.matrix4_translate(linalg.Vector3f32{1.0, 1.0, 0.0})
+    // fmt.printf("%v\n", translation)
 
-    for !glfw.WindowShouldClose(window){
+    trans := linalg.MATRIX4F32_IDENTITY
+    trans = linalg.matrix4_rotate_f32(math.to_radians(f32(90.0)), linalg.Vector3f32{0.0, 0.0, 1.0})
+    trans = linalg.matrix4_scale_f32(linalg.Vector3f32{0.5, 0.5, 0.5})
+
+    for !glfw.WindowShouldClose(engine_state.window){
         glfw.PollEvents()
         imgui_gl.new_frame()
         imgui_glfw.new_frame()
         imgui.new_frame()
 
-        if glfw.GetKey(window, glfw.KEY_ESCAPE) == glfw.PRESS {
-            glfw.SetWindowShouldClose(window, true)
+        if glfw.GetKey(engine_state.window, glfw.KEY_ESCAPE) == glfw.PRESS {
+            glfw.SetWindowShouldClose(engine_state.window, true)
         }
 
-        if glfw.GetKey(window, glfw.KEY_SPACE) == glfw.PRESS {
+        if glfw.GetKey(engine_state.window, glfw.KEY_SPACE) == glfw.PRESS {
             wireframe = !wireframe
         }
 
-        if glfw.GetKey(window, glfw.KEY_W) == glfw.PRESS {
+        if glfw.GetKey(engine_state.window, glfw.KEY_W) == glfw.PRESS {
             fmt.printfln("W")
         }
 
@@ -239,9 +246,10 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
-        ourColorLocation := gl.GetUniformLocation(orange_shader.shader_program, "ourColor")
         gl.UseProgram(orange_shader.shader_program)
-        gl.Uniform4f(ourColorLocation, triangles_color.x, triangles_color.y, triangles_color.z, 1.0) // swizilling is pretty cool
+        shader_set_uniform4f(orange_shader, "ourColor", triangles_color)
+
+        
         gl.BindVertexArray(orange_triangle.VAO)
         // glDrawArrays(GLenum mode, GLint first, GLsizei count)
         // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
@@ -254,7 +262,10 @@ main :: proc() {
 
         // draw yellow triangle
         gl.UseProgram(yellow_shader.shader_program)
-        gl.Uniform4f(ourColorLocation, triangles_color.x, triangles_color.y, triangles_color.z, 1.0)
+        shader_set_uniform4f(orange_shader, "ourColor", triangles_color)
+        transformLocation := gl.GetUniformLocation(orange_shader.shader_program, "transform")
+        gl.UniformMatrix4fv(transformLocation, 1, gl.FALSE, linalg.to_ptr(&trans))
+
         gl.BindVertexArray(triangle_two.VAO)
         gl.DrawArrays(gl.TRIANGLES, 0, 3)
 
@@ -267,17 +278,15 @@ main :: proc() {
         imgui.render()
         imgui_gl.render_draw_data(imgui.get_draw_data())
 
-        glfw.SwapBuffers(window)
+        glfw.SwapBuffers(engine_state.window)
+
     }
 
-    defer gl.DeleteVertexArrays(1, &orange_triangle.VAO)
-    defer gl.DeleteBuffers(1, &orange_triangle.VBO)
-    defer gl.DeleteBuffers(1, &orange_triangle.EBO)
-        // defer gl.DeleteProgram(shader_pogram)
+    gl.DeleteVertexArrays(1, &orange_triangle.VAO)
+    gl.DeleteBuffers(1, &orange_triangle.VBO)
+    gl.DeleteBuffers(1, &orange_triangle.EBO)
 
-    defer glfw.DestroyWindow(window)
-    defer glfw.Terminate()
-
+    engine_cleanup()
 }
 
 engine_init :: proc() {
@@ -294,4 +303,25 @@ engine_init :: proc() {
     glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+
+    engine_state.window = glfw.CreateWindow(800, 600, "OpenGL renderer", nil, nil)
+
+    if engine_state.window == nil {
+        fmt.printfln("Could not create window")
+        glfw.Terminate();
+        return
+    }
+
+    glfw.MakeContextCurrent(engine_state.window)
+    gl.load_up_to(int(3), 3, glfw.gl_set_proc_address) 
+    gl.Viewport(0,0, 800, 600)
+}
+
+engine_cleanup :: proc() {
+    imgui_gl.shutdown()
+    imgui_glfw.shutdown()
+    imgui.destroy_context()
+
+    glfw.DestroyWindow(engine_state.window)
+    glfw.Terminate()
 }
