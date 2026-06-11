@@ -37,7 +37,7 @@ main :: proc() {
     //     -0.5, -0.5, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   // bottom left
     //     -0.5,  0.5, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0    // top left 
     // }
-     quad_vertices: []f32 = {
+    quad_vertices: []f32 = {
         // positions          // texture coords
         0.5,  0.5, 0.0,      1.0, 1.0,   // top right
         0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
@@ -147,6 +147,9 @@ main :: proc() {
         // ---- IMGUI RENDER
         imgui.begin("test panel")
         imgui.color_picker3("triangle colors", &triangles_color)
+        if imgui.button("Wireframe") {
+            wireframe = !wireframe
+        }
         imgui.end()
 
 

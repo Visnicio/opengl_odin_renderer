@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/opengl_odin_renderer",
+            "cwd": "${workspaceFolder}",
+            // "preLaunchTask": "build"
+        }
+    ]   
+}

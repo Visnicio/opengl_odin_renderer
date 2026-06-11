@@ -11,5 +11,5 @@ uniform sampler2D awesomeTexture;
 void main()
 {
     // FragColor = ourColor;
-    FragColor = texture(ourTexture, TexCoord) ;
+    FragColor = texture(ourTexture, TexCoord) * ourColor;
 }
