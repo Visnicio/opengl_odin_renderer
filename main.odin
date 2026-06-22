@@ -93,7 +93,6 @@ main :: proc() {
     
     projection : Mat4 = linalg.matrix4_perspective(math.to_radians(f32(45.0)), 800.0/600.0, 0.1, 100.0)
 
-
     ground_texture := texture_create("textures/y2k_ground_2.png", TextureFormat.RGB)
     defer free(ground_texture) // free out of scope
 
@@ -111,27 +110,60 @@ main :: proc() {
     shader_set_int(triangle_shader, "ourTexture", 0)
     shader_set_int(triangle_shader, "awesomeTexture", 1)
 
+    camera_pos: Vec3 = {0, 0, 3}
+    camera_target : Vec3 = {0,0,0}
+    camera_direction: Vec3 = linalg.normalize(camera_pos - camera_target)
+    world_up : Vec3 = {0, 1, 0}
+    camera_right : Vec3 = linalg.normalize(linalg.cross(world_up, camera_direction))
+    camera_up: Vec3 = linalg.cross(camera_direction, camera_right)
+    camera_front: Vec3 = {0,0,-1}
 
+    // view: Mat4
+    view_matrix = linalg.MATRIX4F32_IDENTITY
+    
+    delta_time: f64
+    last_frame: f64
+    
     for !glfw.WindowShouldClose(engine_state.window){
+        current_frame := glfw.GetTime()
+        delta_time = current_frame - last_frame
+        last_frame = current_frame
+        
         glfw.PollEvents()
         imgui_gl.new_frame()
         imgui_glfw.new_frame()
         imgui.new_frame()
-
+        
+        camera_speed : f32= 20 * f32(delta_time) // precision loss
+        
         if glfw.GetKey(engine_state.window, glfw.KEY_ESCAPE) == glfw.PRESS {
             glfw.SetWindowShouldClose(engine_state.window, true)
         }
-
+        
         if glfw.GetKey(engine_state.window, glfw.KEY_SPACE) == glfw.PRESS {
             wireframe = !wireframe
         }
-
+        
         if glfw.GetKey(engine_state.window, glfw.KEY_W) == glfw.PRESS {
-            fmt.printfln("W")
+            camera_pos += camera_speed * camera_front
         }
-
-        up_vec: Vec3 = {0.5, 1, 0}
-        model_matrix = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), up_vec)
+        if glfw.GetKey(engine_state.window, glfw.KEY_S) == glfw.PRESS {
+            camera_pos -= camera_speed * camera_front
+        }
+        if glfw.GetKey(engine_state.window, glfw.KEY_D) == glfw.PRESS {
+            camera_pos += camera_speed * camera_right
+        }
+        if glfw.GetKey(engine_state.window, glfw.KEY_A) == glfw.PRESS {
+            camera_pos -= camera_speed * camera_right
+        }
+        
+        view_matrix = linalg.matrix4_look_at(
+           camera_pos,
+           camera_pos + camera_front,
+           camera_up
+        )
+        // up_vec: Vec3 = {0.5, 1, 0}
+        model_matrix = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), world_up)
 
         gl.ClearColor(0.2, 0.3, 0.3, 1.0)
         gl.Clear(gl.COLOR_BUFFER_BIT)

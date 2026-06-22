@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/opengl_odin_renderer",
             "cwd": "${workspaceFolder}",
-            // "preLaunchTask": "build"
+            "preLaunchTask": "build"
         }
     ]   
 }
