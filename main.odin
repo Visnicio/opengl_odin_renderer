@@ -175,11 +175,11 @@ main :: proc() {
     defer cube_test_destroy(dummy_cube)
 
     quad: ^Quad = quad_create(quad_vertices, quad_indices)
-    defer free(quad)
+    defer quad_destroy(quad)
 
     second_quad: ^Quad = quad_create(quad_vertices, quad_indices)
     second_quad.position = {-1.0, 0.0, -1.0}
-    defer free(second_quad)
+    defer quad_destroy(second_quad)
 
     // shader
     triangle_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
@@ -327,9 +327,6 @@ main :: proc() {
     // gl.DeleteVertexArrays(1, &orange_triangle.VAO)
     // gl.DeleteBuffers(1, &orange_triangle.VBO)
     // gl.DeleteBuffers(1, &orange_triangle.EBO)
-    gl.DeleteVertexArrays(1, &quad.VAO)
-    gl.DeleteBuffers(1, &quad.VBO)
-    gl.DeleteBuffers(1, &quad.EBO)
 
     engine_cleanup()
 }

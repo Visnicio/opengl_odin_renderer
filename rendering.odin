@@ -178,6 +178,9 @@ quad_draw :: proc(quad: ^Quad, quad_shader: ^Shader, view_matrix: ^Mat4, project
 }
 
 quad_destroy :: proc(q: ^Quad) {
+    gl.DeleteVertexArrays(1, &q.VAO)
+    gl.DeleteBuffers(1, &q.VBO)
+    gl.DeleteBuffers(1, &q.EBO)
     delete(q.textures) // libera o dynamic array
     free(q)
 }
