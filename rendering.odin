@@ -30,7 +30,17 @@ Quad :: struct {
     textures: [dynamic]^Texture,
     VAO: u32,
     VBO: u32,
-    EBO: u32
+    EBO: u32,
+
+    // matrices
+    model_mat: Mat4,
+    view_mat: Mat4, // but usually we use the camera view matrix, we can probably get the camera via a global state, the current camera
+    projection_mat: Mat4, // i think this one also should be the camra one, its shared between quads for now
+
+    // transform
+    position: Vec3,
+    rotation: Vec3, // rotation works by using matrix4_rotate which returns a new matrix rotated given an axis (x,y,z), rotation on 1,0,0 (x) is the pitch
+    // rotation_degress: f32
 }
 
 Shader :: struct {
@@ -113,14 +123,31 @@ quad_create :: proc(vertices: []f32, indices: []u32) -> ^Quad {
     gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 5 * size_of(f32), uintptr(3 * size_of(f32)))
     gl.EnableVertexAttribArray(1)
 
+    // generates projection data, PS: should the render quad be responsible for holding its transform? maybe yes
+    new_quad.model_mat = linalg.MATRIX4F32_IDENTITY
+    new_quad.view_mat = linalg.MATRIX4F32_IDENTITY
+    new_quad.projection_mat = linalg.MATRIX4F32_IDENTITY
+
+    new_quad.position = Vec3{0.0, 0.0, 0.0}
+    new_quad.rotation = Vec3{0.0, 0.0, 0.0}
+    // new_quad.rotation_degress = 0
+
     return new_quad
 }
 
-quad_draw :: proc(quad: ^Quad, quad_shader: ^Shader, model_matrix: ^Mat4, view_matrix: ^Mat4, projection: ^Mat4, color: [3]f32) {
+quad_draw :: proc(quad: ^Quad, quad_shader: ^Shader, view_matrix: ^Mat4, projection: ^Mat4, color: [3]f32) {
 
-     gl.UseProgram(quad_shader.shader_program)
+    // t: Vec3 = quad.position
+    quad.model_mat = linalg.matrix4_translate(quad.position)
+
+    // rotation
+    quad.model_mat *= linalg.matrix4_rotate(linalg.to_radians(quad.rotation.z), Vec3{0,0,1}) // roll
+    quad.model_mat *= linalg.matrix4_rotate(linalg.to_radians(quad.rotation.x), Vec3{1,0,0}) // pitch
+    quad.model_mat *= linalg.matrix4_rotate(linalg.to_radians(quad.rotation.y), Vec3{0,1,0}) // yaw
+
+    gl.UseProgram(quad_shader.shader_program)
     shader_set_uniform4f(quad_shader, "ourColor", color)
-    shader_set_matrix4f(quad_shader, "model", model_matrix)
+    shader_set_matrix4f(quad_shader, "model", &quad.model_mat)
     shader_set_matrix4f(quad_shader, "view", view_matrix)
     shader_set_matrix4f(quad_shader, "projection", projection)
 
@@ -148,6 +175,11 @@ quad_draw :: proc(quad: ^Quad, quad_shader: ^Shader, model_matrix: ^Mat4, view_m
     // gl.DrawArrays(gl.TRIANGLES, 0, 3)
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, quad.EBO)
     gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+}
+
+quad_destroy :: proc(q: ^Quad) {
+    delete(q.textures) // libera o dynamic array
+    free(q)
 }
 
 texture_create :: proc(texture_file: cstring, format: TextureFormat) -> ^Texture{

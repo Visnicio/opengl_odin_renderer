@@ -25,6 +25,102 @@ EngineState :: struct {
 
 engine_state: EngineState
 
+// Camera :: struct {
+//     position: Vec3,
+//     direction: Vec3,
+
+//     // pointing directions
+//     right: Vec3,
+//     up: Vec3,
+//     forward: Vec3 // usually -Z, like godot
+
+//     // matrices
+//     view_mat: Mat4,
+//     projection_mat: Mat4,
+//     model: Mat4,
+// }
+
+// camera_create :: proc() -> ^Camera {
+//     new_camera: Camera = {
+//         right
+//     }
+// }
+
+CubeTest :: struct {
+    quads: [6]^Quad,
+    position: Vec3,
+    rotation: Vec3
+}
+
+cube_test_create :: proc(position: Vec3) -> ^CubeTest {
+
+    quad_vertices: []f32 = {
+        // positions          // texture coords
+        0.5,  0.5, 0.0,      1.0, 1.0,   // top right
+        0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
+        -0.5, -0.5, 0.0,      0.0, 0.0,   // bottom left
+        -0.5,  0.5, 0.0,      0.0, 1.0    // top left 
+    }
+
+    quad_indices: []u32 = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+    }
+
+    new_cube: ^CubeTest = new(CubeTest)
+    new_cube.position = position
+    new_cube.rotation = Vec3{0, 0, 0}
+    new_cube.quads[0] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[0].position = position - Vec3{0, 0, -0.5} // front face
+    
+    new_cube.quads[1] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[1].position = position - Vec3{0, 0, 0.5} // back face
+
+    new_cube.quads[2] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[2].position = position - Vec3{-0.5, 0, 00} // right face
+    new_cube.quads[2].rotation.y = 90
+
+    new_cube.quads[3] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[3].position = position - Vec3{0.5, 0, 00} // left face
+    new_cube.quads[3].rotation.y = 90
+
+    new_cube.quads[4] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[4].position = position - Vec3{0.0, -0.5, 00} // top face
+    new_cube.quads[4].rotation.x = 90
+
+    new_cube.quads[5] = quad_create(quad_vertices, quad_indices)
+    new_cube.quads[5].position = position - Vec3{0.0, 0.5, 00} // bottom face
+    new_cube.quads[5].rotation.x = 90
+
+    return new_cube
+}
+
+// calls this as defer soon after creating the cube if needed, frees the cube, and quads, and handles quad freeing
+cube_test_destroy :: proc(c: ^CubeTest) {
+    for q in c.quads {
+        if q != nil {
+            quad_destroy(q)
+        }
+    }
+    free(c)
+}
+
+cube_test_update :: proc(cube: ^CubeTest) {
+    // for q in cube.quads {
+    //     if q != nil {
+    //         // new_cube.quads[2].position = position - Vec3{-0.5, 0, 00} // right face
+    //         q.position *= cube.position
+    //     }
+    // }
+    cube.quads[0].position = cube.position - Vec3{0, 0, -0.5} // front face
+    cube.quads[1].position = cube.position - Vec3{0, 0, 0.5} // back face
+    cube.quads[2].position = cube.position - Vec3{-0.5, 0, 00} // right face
+    cube.quads[3].position = cube.position - Vec3{0.5, 0, 00} // left face
+    cube.quads[4].position = cube.position - Vec3{0.0, -0.5, 00} // top face
+    cube.quads[5].position = cube.position - Vec3{0.0, 0.5, 00} // bottom face
+
+}
+
 main :: proc() {
     fmt.println("Hello, World!");
 
@@ -50,12 +146,12 @@ main :: proc() {
         1, 2, 3  // second triangle
     }
 
-    quad_tex_coords: []f32 = {
-        1.0, 1.0, // top right
-        1.0, 0.0, // bottom right
-        0.0, 0.0, // bottom left
-        0.0, 1.0  // top left
-    }
+    // quad_tex_coords: []f32 = {
+    //     1.0, 1.0, // top right
+    //     1.0, 0.0, // bottom right
+    //     0.0, 0.0, // bottom left
+    //     0.0, 1.0  // top left
+    // }
 
     wireframe: bool = false
     triangles_color: [3]f32 = {0,0,0}
@@ -74,19 +170,24 @@ main :: proc() {
     // imgui.open
     imgui_glfw.init_for_open_gl(engine_state.window, true)
     imgui_gl.init("#version 330")
-
+    
+    dummy_cube: ^CubeTest = cube_test_create(Vec3{2, 0, 2})
+    defer cube_test_destroy(dummy_cube)
 
     quad: ^Quad = quad_create(quad_vertices, quad_indices)
     defer free(quad)
+
+    second_quad: ^Quad = quad_create(quad_vertices, quad_indices)
+    second_quad.position = {-1.0, 0.0, -1.0}
+    defer free(second_quad)
 
     // shader
     triangle_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
     defer gl.DeleteProgram(triangle_shader.shader_program)
     defer free(triangle_shader)
 
-    model_matrix: Mat4 = linalg.MATRIX4F32_IDENTITY // initialize identity matrix
-    model_matrix = linalg.matrix4_rotate(math.to_radians(f32(-55)), linalg.Vector3f32{1.0, 0.0, 0.0})
-    
+    quad.model_mat = linalg.matrix4_rotate(math.to_radians(f32(-55)), linalg.Vector3f32{1.0, 0.0, 0.0})
+
     view_matrix: Mat4 = linalg.MATRIX4F32_IDENTITY
     view_translation: Vec3 = {0.0, 0.0, -3.0} // we can use our typedefs
     view_matrix = linalg.matrix4_translate(view_translation)
@@ -118,11 +219,13 @@ main :: proc() {
     camera_up: Vec3 = linalg.cross(camera_direction, camera_right)
     camera_front: Vec3 = {0,0,-1}
 
-    // view: Mat4
     view_matrix = linalg.MATRIX4F32_IDENTITY
     
     delta_time: f64
     last_frame: f64
+
+    camera_pitch: f32 = 0
+    camera_yaw: f32 = -90 // default looking towards -z
     
     for !glfw.WindowShouldClose(engine_state.window){
         current_frame := glfw.GetTime()
@@ -135,7 +238,7 @@ main :: proc() {
         imgui.new_frame()
         
         camera_speed : f32= 20 * f32(delta_time) // precision loss
-        
+       
         if glfw.GetKey(engine_state.window, glfw.KEY_ESCAPE) == glfw.PRESS {
             glfw.SetWindowShouldClose(engine_state.window, true)
         }
@@ -150,12 +253,29 @@ main :: proc() {
         if glfw.GetKey(engine_state.window, glfw.KEY_S) == glfw.PRESS {
             camera_pos -= camera_speed * camera_front
         }
-        if glfw.GetKey(engine_state.window, glfw.KEY_D) == glfw.PRESS {
+        if glfw.GetKey(engine_state.window, glfw.KEY_A) == glfw.PRESS {
             camera_pos += camera_speed * camera_right
         }
-        if glfw.GetKey(engine_state.window, glfw.KEY_A) == glfw.PRESS {
+        if glfw.GetKey(engine_state.window, glfw.KEY_D) == glfw.PRESS {
             camera_pos -= camera_speed * camera_right
         }
+
+        // rotate camera
+        if glfw.GetKey(engine_state.window, glfw.KEY_E) == glfw.PRESS {
+            camera_yaw += camera_speed
+        }
+        if glfw.GetKey(engine_state.window, glfw.KEY_Q) == glfw.PRESS {
+            camera_yaw -= camera_speed
+        }
+
+         
+        camera_direction.x = math.cos(linalg.to_radians(camera_yaw)) * math.cos(linalg.to_radians(camera_pitch))
+        camera_direction.y = math.sin(linalg.to_radians(camera_pitch))
+        camera_direction.z = math.sin(linalg.to_radians(camera_yaw)) * math.cos(linalg.to_radians(camera_pitch))
+        camera_front = linalg.normalize(camera_direction)
+        // must recalculate after chanfing camera_front
+        camera_right = linalg.normalize(linalg.cross(camera_front, world_up))
+        camera_up = linalg.cross(camera_direction, camera_right)
         
         view_matrix = linalg.matrix4_look_at(
            camera_pos,
@@ -163,10 +283,13 @@ main :: proc() {
            camera_up
         )
         // up_vec: Vec3 = {0.5, 1, 0}
-        model_matrix = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), world_up)
+        quad.model_mat = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), world_up)
 
+        cube_test_update(dummy_cube)
+
+        // :rendering
         gl.ClearColor(0.2, 0.3, 0.3, 1.0)
-        gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
         if wireframe {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
@@ -174,7 +297,14 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
-        quad_draw(quad, triangle_shader, &model_matrix, &view_matrix, &projection, triangles_color)
+        quad_draw(quad, triangle_shader, &view_matrix, &projection, triangles_color)
+        quad_draw(second_quad, triangle_shader, &view_matrix, &projection, triangles_color)
+
+        for q in dummy_cube.quads {
+            if q != nil {
+                quad_draw(q, triangle_shader, &view_matrix, &projection, triangles_color)
+            }
+        }
 
         // ---- IMGUI RENDER
         imgui.begin("test panel")
@@ -182,6 +312,8 @@ main :: proc() {
         if imgui.button("Wireframe") {
             wireframe = !wireframe
         }
+        // imgui.vector_construct(&dummy_cube.position)
+        imgui.drag_float3("Cube position", &dummy_cube.position, 0.01)
         imgui.end()
 
 
@@ -216,18 +348,19 @@ engine_init :: proc() {
     glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-
+    
     engine_state.window = glfw.CreateWindow(800, 600, "OpenGL renderer", nil, nil)
-
+    
     if engine_state.window == nil {
         fmt.printfln("Could not create window")
         glfw.Terminate();
         return
     }
-
+    
     glfw.MakeContextCurrent(engine_state.window)
     gl.load_up_to(int(3), 3, glfw.gl_set_proc_address) 
     gl.Viewport(0,0, 800, 600)
+    gl.Enable(gl.DEPTH_TEST)
 }
 
 engine_cleanup :: proc() {
