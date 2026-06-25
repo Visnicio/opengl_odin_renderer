@@ -244,12 +244,17 @@ mesh_create :: proc(vertices: []VertexData, indices: []u32) -> ^Mesh {
     // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
     // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
     // attrib 0: posição (xyz) — 3 floats, stride 5 floats, offset 0
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 5 * size_of(f32), 0)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), 0)
     gl.EnableVertexAttribArray(0)
 
-    // attrib 1: UV (uv) — 2 floats, mesmo stride, offset de 3 floats (pula a posição)
-    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 5 * size_of(f32), uintptr(3 * size_of(f32)))
+    // o novo mesh data tem o color entao precisa mandar ele tambem
+    // attrib 2: Color (vec3) — 3 floats, mesmo stride, offset de 3 floats (pula a posição)
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(3 * size_of(f32)))
     gl.EnableVertexAttribArray(1)
+
+    // attrib 1: UV (uv) — 2 floats, mesmo stride, offset de 3 floats (pula a posição)
+    gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(6 * size_of(f32)))
+    gl.EnableVertexAttribArray(2)
 
     // generates projection data, PS: should the render mesh be responsible for holding its transform? maybe yes
     new_mesh.model_mat = linalg.MATRIX4F32_IDENTITY
