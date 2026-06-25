@@ -55,91 +55,75 @@ CubeTest :: struct {
 }
 
 cube_test_create :: proc(position: Vec3) -> ^CubeTest {
-
-    //        v6 ───────────── v7
-    //        /│               /│
-    //       / │              / │
-    //      /  │             /  │
-    //    v4 ──┼─────────── v5   │
-    //     │   │            │    │
-    //     │   │            │    │
-    //     │  v2 ───────────┼── v3
-    //     │  /              │  /
-    //     │ /               │ /
-    //     │/                │/
-    //    v0 ──────────────  v1
+    // 8 cantos do cubo:
     //
+    //        p011 ───────────── p111
+    //        /│                 /│
+    //       / │                / │
+    //     p010 ──────────── p110 │
+    //      │   │             │   │
+    //      │  p001 ──────────┼─ p101
+    //      │  /              │  /
+    //      │ /               │ /
+    //     p000 ───────────── p100
+    //
+    // Cada face tem 4 vértices PRÓPRIOS (24 no total), então cada uma
+    // recebe UVs independentes {0,0}..{1,1} sem conflito com as vizinhas.
+    // UV por canto da face: 0=(0,0) bottom-left, 1=(1,0) bottom-right,
+    //                       2=(1,1) top-right,    3=(0,1) top-left
+
     cube_vertices: []VertexData = {
+        // FRONT (+z)
+        { position = {-0.5, -0.5,  0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = { 0.5, -0.5,  0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = { 0.5,  0.5,  0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = {-0.5,  0.5,  0.5}, color = {1,1,1}, uv = {0, 1} },
 
-        { // 0
-            position = {-0.5,  0.5, -0.5},
-            color = {1, 1, 1},
-            uv = {0, 1}
-        },
+        // BACK (-z)
+        { position = { 0.5, -0.5, -0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = {-0.5, -0.5, -0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = {-0.5,  0.5, -0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = { 0.5,  0.5, -0.5}, color = {1,1,1}, uv = {0, 1} },
 
-        { // 1
-            position = {0.5,  0.5, -0.5},
-            color = {1, 1, 1},
-            uv = {1, 1}
-        },
+        // LEFT (-x)
+        { position = {-0.5, -0.5, -0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = {-0.5, -0.5,  0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = {-0.5,  0.5,  0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = {-0.5,  0.5, -0.5}, color = {1,1,1}, uv = {0, 1} },
 
-        { // 2
-            position = {-0.5,  0.5, 0.5},
-            color = {1, 1, 1},
-            uv = {0, 0}
-        },
+        // RIGHT (+x)
+        { position = { 0.5, -0.5,  0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = { 0.5, -0.5, -0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = { 0.5,  0.5, -0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = { 0.5,  0.5,  0.5}, color = {1,1,1}, uv = {0, 1} },
 
-        { // 3 
-            position = {0.5,  0.5, 0.5},
-            color = {1, 1, 1},
-            uv = {1, 0}
-        },
+        // TOP (+y)
+        { position = {-0.5,  0.5,  0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = { 0.5,  0.5,  0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = { 0.5,  0.5, -0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = {-0.5,  0.5, -0.5}, color = {1,1,1}, uv = {0, 1} },
 
-        { // 4 - top left corner
-            position = {-0.5,  -0.5, -0.5},
-            color = {1, 1, 1},
-            uv = {0, 0}
-        },
-
-        { // 5
-            position = {0.5,  -0.5, -0.5},
-            color = {1, 1, 1},
-            uv = {0, 1}
-        },
-
-        { // 6
-            position = {-0.5,  -0.5, 0.5},
-            color = {1, 1, 1},
-            uv = {1, 0}
-        },
-
-        {
-            position = {0.5,  -0.5, 0.5},
-            color = {1, 1, 1},
-            uv = {1, 1}
-        }
+        // BOTTOM (-y)
+        { position = {-0.5, -0.5, -0.5}, color = {1,1,1}, uv = {0, 0} },
+        { position = { 0.5, -0.5, -0.5}, color = {1,1,1}, uv = {1, 0} },
+        { position = { 0.5, -0.5,  0.5}, color = {1,1,1}, uv = {1, 1} },
+        { position = {-0.5, -0.5,  0.5}, color = {1,1,1}, uv = {0, 1} },
     }
 
-    cube_indides: []u32 = {
-        0, 1, 2, // bottom-face-first-triangle
-        1, 2, 3,  // bottom face
-        0, 1, 4, // front face
-        1, 4, 5, // front face
-        4, 5, 6, // top face
-        5, 6, 7, // top face
-        2, 3, 6, // back face // wrong uv, change order
-        3, 6, 7, // back face
-        0, 2, 4, // left face
-        2, 4, 6, // left face
-        1, 3, 5, // right face // wrong uv
-        3, 5, 7 // right face
+    // Cada face: 4f+0, 4f+1, 4f+2  /  4f+0, 4f+2, 4f+3  (winding CCW)
+    cube_indices: []u32 = {
+         0,  1,  2,   0,  2,  3, // front
+         4,  5,  6,   4,  6,  7, // back
+         8,  9, 10,   8, 10, 11, // left
+        12, 13, 14,  12, 14, 15, // right
+        16, 17, 18,  16, 18, 19, // top
+        20, 21, 22,  20, 22, 23, // bottom
     }
 
     new_cube: ^CubeTest = new(CubeTest)
     new_cube.position = position
     new_cube.rotation = Vec3{0, 0, 0}
-    new_cube.mesh = mesh_create(cube_vertices, cube_indides)
-
+    new_cube.mesh = mesh_create(cube_vertices, cube_indices)
     return new_cube
 }
 
