@@ -10,6 +10,12 @@ import "vendor:glfw"
 import gl "vendor:OpenGL"
 import stb_image "vendor:stb/image"
 
+VertexData :: struct {
+    position: Vec3,
+    color: Vec3,
+    uv: Vec2
+}
+
 TextureFormat :: enum u32 {
     RGB  = gl.RGB,
     RGBA = gl.RGBA,
@@ -25,8 +31,27 @@ Triangle :: struct {
     EBO: u32
 }
 
+// Quad by accepting N vertices is kinda of a mesh, a mesh can have any amount of vertices, but for sake of learning im gonna make them separate, an eventully Quad will be deprecated since its more of a concept rather than a thing
 Quad :: struct {
     vertices: []f32,
+    textures: [dynamic]^Texture,
+    VAO: u32,
+    VBO: u32,
+    EBO: u32,
+
+    // matrices
+    model_mat: Mat4,
+    view_mat: Mat4, // but usually we use the camera view matrix, we can probably get the camera via a global state, the current camera
+    projection_mat: Mat4, // i think this one also should be the camra one, its shared between quads for now
+
+    // transform
+    position: Vec3,
+    rotation: Vec3, // rotation works by using matrix4_rotate which returns a new matrix rotated given an axis (x,y,z), rotation on 1,0,0 (x) is the pitch
+    // rotation_degress: f32
+}
+
+Mesh :: struct {
+    vertices: [dynamic]VertexData,
     textures: [dynamic]^Texture,
     VAO: u32,
     VBO: u32,
@@ -184,6 +209,111 @@ quad_destroy :: proc(q: ^Quad) {
     delete(q.textures) // libera o dynamic array
     free(q)
 }
+
+
+// ----------------------------- MESH
+mesh_create :: proc(vertices: []VertexData, indices: []u32) -> ^Mesh {
+    new_mesh := new(Mesh) // ALLOCATES ON HEAP, NEED TO FREE LATER
+    gl.GenVertexArrays(1, &new_mesh.VAO)
+
+    gl.BindVertexArray(new_mesh.VAO) // binds to configure
+
+    gl.GenBuffers(1, &new_mesh.VBO)
+    // Vincula o VBO ao target ARRAY_BUFFER no estado global do OpenGL.
+    // OpenGL opera como uma máquina de estados: todas as operações subsequentes sobre
+    // ARRAY_BUFFER afetarão este VBO até que outro seja vinculado ou o target seja desvinculado.
+    gl.BindBuffer(gl.ARRAY_BUFFER, new_mesh.VBO)
+    
+    // Carrega os dados de vértices para o buffer atualmente vinculado ao ARRAY_BUFFER.
+    // O último argumento define o padrão de uso: STATIC_DRAW (escrito uma vez, lido muitas vezes),
+    // DYNAMIC_DRAW (atualizado frequentemente) ou STREAM_DRAW (escrito e lido uma única vez).
+    gl.BufferData(gl.ARRAY_BUFFER, len(vertices) * size_of(VertexData), raw_data(vertices), gl.STATIC_DRAW)
+
+
+    gl.GenBuffers(1, &new_mesh.EBO)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, new_mesh.EBO)
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, len(indices) * size_of(u32), raw_data(indices), gl.STATIC_DRAW)
+
+
+    // Attach eveything to the VAO
+    // params, in order
+    // first  (0) is the location of the vertex attribute in the shader (layout(location = 0))
+    // second (3) is the number of components per vertex attribute (vec3 = 3)
+    // third  (gl.FLOAT) is the data type of each component
+    // fourth (gl.FALSE) specifies whether fixed-point data values should be normalized (true) or converted directly as integers (false) when accessed
+    // fifth  (3 * size_of(f32)) is the byte offset between consecutive vertex attributes (the stride). Since our vertices are tightly packed, this is just the size of one vertex (3 floats)
+    // sixth  (0) is the offset of the first component of the first vertex attribute in the buffer. Since our vertex data starts at the beginning of the buffer, this is 0 (or nil)
+    // attrib 0: posição (xyz) — 3 floats, stride 5 floats, offset 0
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 5 * size_of(f32), 0)
+    gl.EnableVertexAttribArray(0)
+
+    // attrib 1: UV (uv) — 2 floats, mesmo stride, offset de 3 floats (pula a posição)
+    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 5 * size_of(f32), uintptr(3 * size_of(f32)))
+    gl.EnableVertexAttribArray(1)
+
+    // generates projection data, PS: should the render mesh be responsible for holding its transform? maybe yes
+    new_mesh.model_mat = linalg.MATRIX4F32_IDENTITY
+    new_mesh.view_mat = linalg.MATRIX4F32_IDENTITY
+    new_mesh.projection_mat = linalg.MATRIX4F32_IDENTITY
+
+    new_mesh.position = Vec3{0.0, 0.0, 0.0}
+    new_mesh.rotation = Vec3{0.0, 0.0, 0.0}
+    // new_mesh.rotation_degress = 0
+
+    return new_mesh
+}
+
+mesh_draw :: proc(mesh: ^Mesh, mesh_shader: ^Shader, view_matrix: ^Mat4, projection: ^Mat4, color: [3]f32) {
+
+    // t: Vec3 = mesh.position
+    mesh.model_mat = linalg.matrix4_translate(mesh.position)
+
+    // rotation
+    mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.z), Vec3{0,0,1}) // roll
+    mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.x), Vec3{1,0,0}) // pitch
+    mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.y), Vec3{0,1,0}) // yaw
+
+    gl.UseProgram(mesh_shader.shader_program)
+    shader_set_uniform4f(mesh_shader, "ourColor", color)
+    shader_set_matrix4f(mesh_shader, "model", &mesh.model_mat)
+    shader_set_matrix4f(mesh_shader, "view", view_matrix)
+    shader_set_matrix4f(mesh_shader, "projection", projection)
+
+    // A cada frame, colocamos cada textura no slot correto antes de desenhar.
+    // ActiveTexture seleciona qual slot estamos configurando.
+    // BindTexture coloca a textura nesse slot.
+    // O shader então lê de cada slot pelo índice definido nos uniforms acima.
+    // gl.ActiveTexture(gl.TEXTURE0)
+    // gl.BindTexture(gl.TEXTURE_2D, ground_texture.id)
+
+    // gl.ActiveTexture(gl.TEXTURE1)
+    // gl.BindTexture(gl.TEXTURE_2D, awesome_texture.id)
+
+    for texture, i in mesh.textures {
+        gl.ActiveTexture(gl.TEXTURE0 + u32(i))
+        gl.BindTexture(gl.TEXTURE_2D, texture.id)
+    }
+
+    gl.BindVertexArray(mesh.VAO) // loads the mesh VAO so we now how to query its pipeline
+    // glDrawArrays(GLenum mode, GLint first, GLsizei count)
+    // Draws `count` vertices found in the currently bound vertex buffer object (or indirectly via a vertex array object).
+    //   mode:  Specifies the kind of primitive to render (e.g. GL_TRIANGLES, GL_LINES, GL_POINTS ...)
+    //   first: Specifies the starting index in the enabled arrays.
+    //   count: Specifies the number of vertices to render.
+    // gl.DrawArrays(gl.TRIANGLES, 0, 3)
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.EBO)
+    gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+}
+
+mesh_destroy :: proc(mesh: ^Mesh) {
+    gl.DeleteVertexArrays(1, &mesh.VAO)
+    gl.DeleteBuffers(1, &mesh.VBO)
+    gl.DeleteBuffers(1, &mesh.EBO)
+    delete(mesh.textures) // libera o dynamic array
+    delete(mesh.vertices)
+    free(mesh)
+}
+
 
 texture_create :: proc(texture_file: cstring, format: TextureFormat) -> ^Texture{
     new_texture := new(Texture)

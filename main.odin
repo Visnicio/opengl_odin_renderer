@@ -18,6 +18,7 @@ import imgui_glfw "odin-imgui/imgui_impl_glfw"
 
 Mat4 :: linalg.Matrix4f32
 Vec3 :: linalg.Vector3f32
+Vec2 :: linalg.Vector2f32
 
 EngineState :: struct {
     window: glfw.WindowHandle
@@ -47,61 +48,86 @@ engine_state: EngineState
 // }
 
 CubeTest :: struct {
-    quads: [6]^Quad,
+    // quads: [6]^Quad,
+    mesh: ^Mesh,
     position: Vec3,
     rotation: Vec3
 }
 
 cube_test_create :: proc(position: Vec3) -> ^CubeTest {
 
-    quad_vertices: []f32 = {
+    cube_vertices: []VertexData = {
+
+        {
+            position = {-0.5,  0.5, -0.5},
+            color = {1, 1, 1},
+            uv = {1, 1}
+        },
+
+        {
+            position = {0.5,  0.5, -0.5},
+            color = {1, 1, 1},
+            uv = {1, 1}
+        },
+
+        {
+            position = {-0.5,  0.5, 0.5},
+            color = {1, 1, 1},
+            uv = {1, 1}
+        },
+
+        {
+            position = {0.5,  0.5, 0.5},
+            color = {1, 1, 1},
+            uv = {1, 1}
+        }
+
         // positions          // texture coords
-        0.5,  0.5, 0.0,      1.0, 1.0,   // top right
-        0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
-        -0.5, -0.5, 0.0,      0.0, 0.0,   // bottom left
-        -0.5,  0.5, 0.0,      0.0, 1.0    // top left 
+        // 0.5,  0.5, 0.0,      1.0, 1.0,   // top right
+        // 0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
+        // -0.5, -0.5, 0.0,      0.0, 0.0,   // bottom left
+        // -0.5,  0.5, 0.0,      0.0, 1.0    // top left 
     }
 
-    quad_indices: []u32 = {
-        0, 1, 3, // first triangle
+    cube_indides: []u32 = {
+        0, 1, 2, // bottom-face-first-triangle
         1, 2, 3  // second triangle
     }
 
     new_cube: ^CubeTest = new(CubeTest)
     new_cube.position = position
     new_cube.rotation = Vec3{0, 0, 0}
-    new_cube.quads[0] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[0].position = position - Vec3{0, 0, -0.5} // front face
+    new_cube.mesh = mesh_create(cube_vertices, cube_indides)
+
+
+    // new_cube.quads[0] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[0].position = position - Vec3{0, 0, -0.5} // front face
     
-    new_cube.quads[1] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[1].position = position - Vec3{0, 0, 0.5} // back face
+    // new_cube.quads[1] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[1].position = position - Vec3{0, 0, 0.5} // back face
 
-    new_cube.quads[2] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[2].position = position - Vec3{-0.5, 0, 00} // right face
-    new_cube.quads[2].rotation.y = 90
+    // new_cube.quads[2] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[2].position = position - Vec3{-0.5, 0, 00} // right face
+    // new_cube.quads[2].rotation.y = 90
 
-    new_cube.quads[3] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[3].position = position - Vec3{0.5, 0, 00} // left face
-    new_cube.quads[3].rotation.y = 90
+    // new_cube.quads[3] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[3].position = position - Vec3{0.5, 0, 00} // left face
+    // new_cube.quads[3].rotation.y = 90
 
-    new_cube.quads[4] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[4].position = position - Vec3{0.0, -0.5, 00} // top face
-    new_cube.quads[4].rotation.x = 90
+    // new_cube.quads[4] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[4].position = position - Vec3{0.0, -0.5, 00} // top face
+    // new_cube.quads[4].rotation.x = 90
 
-    new_cube.quads[5] = quad_create(quad_vertices, quad_indices)
-    new_cube.quads[5].position = position - Vec3{0.0, 0.5, 00} // bottom face
-    new_cube.quads[5].rotation.x = 90
+    // new_cube.quads[5] = quad_create(quad_vertices, quad_indices)
+    // new_cube.quads[5].position = position - Vec3{0.0, 0.5, 00} // bottom face
+    // new_cube.quads[5].rotation.x = 90
 
     return new_cube
 }
 
 // calls this as defer soon after creating the cube if needed, frees the cube, and quads, and handles quad freeing
 cube_test_destroy :: proc(c: ^CubeTest) {
-    for q in c.quads {
-        if q != nil {
-            quad_destroy(q)
-        }
-    }
+    mesh_destroy(c.mesh)
     free(c)
 }
 
@@ -112,12 +138,12 @@ cube_test_update :: proc(cube: ^CubeTest) {
     //         q.position *= cube.position
     //     }
     // }
-    cube.quads[0].position = cube.position - Vec3{0, 0, -0.5} // front face
-    cube.quads[1].position = cube.position - Vec3{0, 0, 0.5} // back face
-    cube.quads[2].position = cube.position - Vec3{-0.5, 0, 00} // right face
-    cube.quads[3].position = cube.position - Vec3{0.5, 0, 00} // left face
-    cube.quads[4].position = cube.position - Vec3{0.0, -0.5, 00} // top face
-    cube.quads[5].position = cube.position - Vec3{0.0, 0.5, 00} // bottom face
+    // cube.quads[0].position = cube.position - Vec3{0, 0, -0.5} // front face
+    // cube.quads[1].position = cube.position - Vec3{0, 0, 0.5} // back face
+    // cube.quads[2].position = cube.position - Vec3{-0.5, 0, 00} // right face
+    // cube.quads[3].position = cube.position - Vec3{0.5, 0, 00} // left face
+    // cube.quads[4].position = cube.position - Vec3{0.0, -0.5, 00} // top face
+    // cube.quads[5].position = cube.position - Vec3{0.0, 0.5, 00} // bottom face
 
 }
 
@@ -300,11 +326,12 @@ main :: proc() {
         quad_draw(quad, triangle_shader, &view_matrix, &projection, triangles_color)
         quad_draw(second_quad, triangle_shader, &view_matrix, &projection, triangles_color)
 
-        for q in dummy_cube.quads {
-            if q != nil {
-                quad_draw(q, triangle_shader, &view_matrix, &projection, triangles_color)
-            }
-        }
+        // for q in dummy_cube.quads {
+        //     if q != nil {
+        //         quad_draw(q, triangle_shader, &view_matrix, &projection, triangles_color)
+        //     }
+        // }
+        mesh_draw(dummy_cube.mesh, triangle_shader, &view_matrix, &projection, triangles_color)
 
         // ---- IMGUI RENDER
         imgui.begin("test panel")
