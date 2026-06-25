@@ -56,71 +56,89 @@ CubeTest :: struct {
 
 cube_test_create :: proc(position: Vec3) -> ^CubeTest {
 
+    //        v6 ───────────── v7
+    //        /│               /│
+    //       / │              / │
+    //      /  │             /  │
+    //    v4 ──┼─────────── v5   │
+    //     │   │            │    │
+    //     │   │            │    │
+    //     │  v2 ───────────┼── v3
+    //     │  /              │  /
+    //     │ /               │ /
+    //     │/                │/
+    //    v0 ──────────────  v1
+    //
     cube_vertices: []VertexData = {
 
-        {
+        { // 0
             position = {-0.5,  0.5, -0.5},
             color = {1, 1, 1},
-            uv = {1, 1}
+            uv = {0, 1}
         },
 
-        {
+        { // 1
             position = {0.5,  0.5, -0.5},
             color = {1, 1, 1},
             uv = {1, 1}
         },
 
-        {
+        { // 2
             position = {-0.5,  0.5, 0.5},
             color = {1, 1, 1},
-            uv = {1, 1}
+            uv = {0, 0}
+        },
+
+        { // 3 
+            position = {0.5,  0.5, 0.5},
+            color = {1, 1, 1},
+            uv = {1, 0}
+        },
+
+        { // 4 - top left corner
+            position = {-0.5,  -0.5, -0.5},
+            color = {1, 1, 1},
+            uv = {0, 0}
+        },
+
+        { // 5
+            position = {0.5,  -0.5, -0.5},
+            color = {1, 1, 1},
+            uv = {0, 1}
+        },
+
+        { // 6
+            position = {-0.5,  -0.5, 0.5},
+            color = {1, 1, 1},
+            uv = {1, 0}
         },
 
         {
-            position = {0.5,  0.5, 0.5},
+            position = {0.5,  -0.5, 0.5},
             color = {1, 1, 1},
             uv = {1, 1}
         }
-
-        // positions          // texture coords
-        // 0.5,  0.5, 0.0,      1.0, 1.0,   // top right
-        // 0.5, -0.5, 0.0,      1.0, 0.0,   // bottom right
-        // -0.5, -0.5, 0.0,      0.0, 0.0,   // bottom left
-        // -0.5,  0.5, 0.0,      0.0, 1.0    // top left 
     }
 
     cube_indides: []u32 = {
         0, 1, 2, // bottom-face-first-triangle
-        1, 2, 3  // second triangle
+        1, 2, 3,  // bottom face
+        0, 1, 4, // front face
+        1, 4, 5, // front face
+        4, 5, 6, // top face
+        5, 6, 7, // top face
+        2, 3, 6, // back face // wrong uv, change order
+        3, 6, 7, // back face
+        0, 2, 4, // left face
+        2, 4, 6, // left face
+        1, 3, 5, // right face // wrong uv
+        3, 5, 7 // right face
     }
 
     new_cube: ^CubeTest = new(CubeTest)
     new_cube.position = position
     new_cube.rotation = Vec3{0, 0, 0}
     new_cube.mesh = mesh_create(cube_vertices, cube_indides)
-
-
-    // new_cube.quads[0] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[0].position = position - Vec3{0, 0, -0.5} // front face
-    
-    // new_cube.quads[1] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[1].position = position - Vec3{0, 0, 0.5} // back face
-
-    // new_cube.quads[2] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[2].position = position - Vec3{-0.5, 0, 00} // right face
-    // new_cube.quads[2].rotation.y = 90
-
-    // new_cube.quads[3] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[3].position = position - Vec3{0.5, 0, 00} // left face
-    // new_cube.quads[3].rotation.y = 90
-
-    // new_cube.quads[4] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[4].position = position - Vec3{0.0, -0.5, 00} // top face
-    // new_cube.quads[4].rotation.x = 90
-
-    // new_cube.quads[5] = quad_create(quad_vertices, quad_indices)
-    // new_cube.quads[5].position = position - Vec3{0.0, 0.5, 00} // bottom face
-    // new_cube.quads[5].rotation.x = 90
 
     return new_cube
 }
@@ -144,7 +162,11 @@ cube_test_update :: proc(cube: ^CubeTest) {
     // cube.quads[3].position = cube.position - Vec3{0.5, 0, 00} // left face
     // cube.quads[4].position = cube.position - Vec3{0.0, -0.5, 00} // top face
     // cube.quads[5].position = cube.position - Vec3{0.0, 0.5, 00} // bottom face
-
+    // for &vertex_data in cube.mesh.vertices {
+    //     vertex_data.position = vertex_data.position * cube.position
+    // }
+    cube.mesh.position = cube.position
+    cube.mesh.rotation = cube.rotation
 }
 
 main :: proc() {
@@ -223,8 +245,8 @@ main :: proc() {
     ground_texture := texture_create("textures/y2k_ground_2.png", TextureFormat.RGB)
     defer free(ground_texture) // free out of scope
 
-    awesome_texture := texture_create("textures/awesomeface.png", TextureFormat.RGBA)
-    defer free(awesome_texture)
+    // awesome_texture := texture_create("textures/awesomeface.png", TextureFormat.RGBA)
+    // defer free(awesome_texture)
 
     append(&quad.textures, ground_texture)
     // append(&quad.textures, awesome_texture)
@@ -235,7 +257,7 @@ main :: proc() {
     // Isso só precisa ser feito uma vez, não a cada frame.
     gl.UseProgram(triangle_shader.shader_program)
     shader_set_int(triangle_shader, "ourTexture", 0)
-    shader_set_int(triangle_shader, "awesomeTexture", 1)
+    // shader_set_int(triangle_shader, "awesomeTexture", 1)
 
     camera_pos: Vec3 = {0, 0, 3}
     camera_target : Vec3 = {0,0,0}
@@ -323,8 +345,8 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
-        quad_draw(quad, triangle_shader, &view_matrix, &projection, triangles_color)
-        quad_draw(second_quad, triangle_shader, &view_matrix, &projection, triangles_color)
+        //quad_draw(quad, triangle_shader, &view_matrix, &projection, triangles_color)
+        //quad_draw(second_quad, triangle_shader, &view_matrix, &projection, triangles_color)
 
         // for q in dummy_cube.quads {
         //     if q != nil {
@@ -341,6 +363,7 @@ main :: proc() {
         }
         // imgui.vector_construct(&dummy_cube.position)
         imgui.drag_float3("Cube position", &dummy_cube.position, 0.01)
+        imgui.drag_float3("Cube rotation", &dummy_cube.rotation, 0.1)
         imgui.end()
 
 

@@ -53,6 +53,7 @@ Quad :: struct {
 Mesh :: struct {
     vertices: [dynamic]VertexData,
     textures: [dynamic]^Texture,
+    indices: []u32,
     VAO: u32,
     VBO: u32,
     EBO: u32,
@@ -260,7 +261,9 @@ mesh_create :: proc(vertices: []VertexData, indices: []u32) -> ^Mesh {
     new_mesh.model_mat = linalg.MATRIX4F32_IDENTITY
     new_mesh.view_mat = linalg.MATRIX4F32_IDENTITY
     new_mesh.projection_mat = linalg.MATRIX4F32_IDENTITY
+    
 
+    new_mesh.indices = indices
     new_mesh.position = Vec3{0.0, 0.0, 0.0}
     new_mesh.rotation = Vec3{0.0, 0.0, 0.0}
     // new_mesh.rotation_degress = 0
@@ -307,7 +310,7 @@ mesh_draw :: proc(mesh: ^Mesh, mesh_shader: ^Shader, view_matrix: ^Mat4, project
     //   count: Specifies the number of vertices to render.
     // gl.DrawArrays(gl.TRIANGLES, 0, 3)
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.EBO)
-    gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+    gl.DrawElements(gl.TRIANGLES, i32(len(mesh.indices)), gl.UNSIGNED_INT, nil)
 }
 
 mesh_destroy :: proc(mesh: ^Mesh) {
@@ -315,6 +318,7 @@ mesh_destroy :: proc(mesh: ^Mesh) {
     gl.DeleteBuffers(1, &mesh.VBO)
     gl.DeleteBuffers(1, &mesh.EBO)
     delete(mesh.textures) // libera o dynamic array
+    // delete(mesh.indices)
     delete(mesh.vertices)
     free(mesh)
 }
