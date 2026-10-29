@@ -7,6 +7,8 @@ import "core:strings"
 import "base:runtime"
 import "core:math/linalg"
 
+import "engine"
+
 import "vendor:glfw"
 import gl "vendor:OpenGL"
 import stb_image "vendor:stb/image"
@@ -16,10 +18,6 @@ import imgui_gl "odin-imgui/imgui_impl_opengl3"
 import imgui_glfw "odin-imgui/imgui_impl_glfw"
 
 
-Mat4 :: linalg.Matrix4f32
-Vec3 :: linalg.Vector3f32
-Vec2 :: linalg.Vector2f32
-
 EngineState :: struct {
     window: glfw.WindowHandle
 }
@@ -27,11 +25,14 @@ EngineState :: struct {
 engine_state: EngineState
 
 // Camera :: struct {
-//     position: Vec3,
-//     direction: Vec3,
+//     position: Vec3, // where the camera iss
+//     direction: Vec3, // direciton is usually actually the opposite direction to where we are looking at necause the camera points to -z
+//     in learnopengl you see that the target is the origin (vector 0,0,0) and the direction turns ou to point back to the camera
+
+//     target: Vect3 // where we wanna look at
 
 //     // pointing directions
-//     right: Vec3,
+//     right: Vec3, // positive x of the camera space, to get it we first define the up vector in world space and cross it with the target, cross vector generates another vector perpendicular to those
 //     up: Vec3,
 //     forward: Vec3 // usually -Z, like godot
 
@@ -49,12 +50,12 @@ engine_state: EngineState
 
 CubeTest :: struct {
     // quads: [6]^Quad,
-    mesh: ^Mesh,
-    position: Vec3,
-    rotation: Vec3
+    mesh: ^engine.Mesh,
+    position: engine.Vec3,
+    rotation: engine.Vec3
 }
 
-cube_test_create :: proc(position: Vec3) -> ^CubeTest {
+cube_test_create :: proc(position: engine.Vec3) -> ^CubeTest {
     // 8 cantos do cubo:
     //
     //        p011 ───────────── p111
@@ -72,7 +73,7 @@ cube_test_create :: proc(position: Vec3) -> ^CubeTest {
     // UV por canto da face: 0=(0,0) bottom-left, 1=(1,0) bottom-right,
     //                       2=(1,1) top-right,    3=(0,1) top-left
 
-    cube_vertices: []VertexData = {
+    cube_vertices: []engine.VertexData = {
         // FRONT (+z)
         { position = {-0.5, -0.5,  0.5}, color = {1,1,1}, uv = {0, 0} },
         { position = { 0.5, -0.5,  0.5}, color = {1,1,1}, uv = {1, 0} },
@@ -122,14 +123,14 @@ cube_test_create :: proc(position: Vec3) -> ^CubeTest {
 
     new_cube: ^CubeTest = new(CubeTest)
     new_cube.position = position
-    new_cube.rotation = Vec3{0, 0, 0}
-    new_cube.mesh = mesh_create(cube_vertices, cube_indices)
+    new_cube.rotation = engine.Vec3{0, 0, 0}
+    new_cube.mesh = engine.mesh_create(cube_vertices, cube_indices)
     return new_cube
 }
 
 // calls this as defer soon after creating the cube if needed, frees the cube, and quads, and handles quad freeing
 cube_test_destroy :: proc(c: ^CubeTest) {
-    mesh_destroy(c.mesh)
+    engine.mesh_destroy(c.mesh)
     free(c)
 }
 
@@ -154,8 +155,6 @@ cube_test_update :: proc(cube: ^CubeTest) {
 }
 
 main :: proc() {
-    fmt.println("Hello, World!");
-
     stb_image.set_flip_vertically_on_load(1)
 
     // quad_vertices: []f32 = {
@@ -204,53 +203,37 @@ main :: proc() {
     imgui_glfw.init_for_open_gl(engine_state.window, true)
     imgui_gl.init("#version 330")
     
-    dummy_cube: ^CubeTest = cube_test_create(Vec3{2, 0, 2})
+    dummy_cube: ^CubeTest = cube_test_create(engine.Vec3{2, 0, 2})
     defer cube_test_destroy(dummy_cube)
 
-    quad: ^Quad = quad_create(quad_vertices, quad_indices)
-    defer quad_destroy(quad)
-
-    second_quad: ^Quad = quad_create(quad_vertices, quad_indices)
-    second_quad.position = {-1.0, 0.0, -1.0}
-    defer quad_destroy(second_quad)
-
     // shader
-    triangle_shader: ^Shader = shader_create("triangle.vert", "triangle.frag")
+    triangle_shader: ^engine.Shader = engine.shader_create("triangle.vert", "triangle.frag")
     defer gl.DeleteProgram(triangle_shader.shader_program)
     defer free(triangle_shader)
 
-    quad.model_mat = linalg.matrix4_rotate(math.to_radians(f32(-55)), linalg.Vector3f32{1.0, 0.0, 0.0})
-
-    view_matrix: Mat4 = linalg.MATRIX4F32_IDENTITY
-    view_translation: Vec3 = {0.0, 0.0, -3.0} // we can use our typedefs
+    view_matrix: engine.Mat4 = linalg.MATRIX4F32_IDENTITY
+    view_translation: engine.Vec3 = {0.0, 0.0, -3.0} // we can use our typedefs
     view_matrix = linalg.matrix4_translate(view_translation)
     
-    projection : Mat4 = linalg.matrix4_perspective(math.to_radians(f32(45.0)), 800.0/600.0, 0.1, 100.0)
+    projection : engine.Mat4 = linalg.matrix4_perspective(math.to_radians(f32(45.0)), 800.0/600.0, 0.1, 100.0)
 
-    ground_texture := texture_create("textures/y2k_ground_2.png", TextureFormat.RGB)
+    ground_texture := engine.texture_create("textures/y2k_ground_2.png", engine.TextureFormat.RGB)
     defer free(ground_texture) // free out of scope
-
-    // awesome_texture := texture_create("textures/awesomeface.png", TextureFormat.RGBA)
-    // defer free(awesome_texture)
-
-    append(&quad.textures, ground_texture)
-    // append(&quad.textures, awesome_texture)
-  
 
     // O sampler2D no shader não recebe pixels — recebe um índice de texture unit (slot).
     // Aqui dizemos: "quando o shader pedir 'ourTexture', leia do slot 0; 'awesomeTexture', do slot 1".
     // Isso só precisa ser feito uma vez, não a cada frame.
     gl.UseProgram(triangle_shader.shader_program)
-    shader_set_int(triangle_shader, "ourTexture", 0)
+    engine.shader_set_int(triangle_shader, "ourTexture", 0)
     // shader_set_int(triangle_shader, "awesomeTexture", 1)
 
-    camera_pos: Vec3 = {0, 0, 3}
-    camera_target : Vec3 = {0,0,0}
-    camera_direction: Vec3 = linalg.normalize(camera_pos - camera_target)
-    world_up : Vec3 = {0, 1, 0}
-    camera_right : Vec3 = linalg.normalize(linalg.cross(world_up, camera_direction))
-    camera_up: Vec3 = linalg.cross(camera_direction, camera_right)
-    camera_front: Vec3 = {0,0,-1}
+    camera_pos: engine.Vec3 = {0, 0, 3}
+    camera_target : engine.Vec3 = {0,0,0}
+    camera_direction: engine.Vec3 = linalg.normalize(camera_pos - camera_target)
+    world_up : engine.Vec3 = {0, 1, 0}
+    camera_right : engine.Vec3 = linalg.normalize(linalg.cross(world_up, camera_direction))
+    camera_up: engine.Vec3 = linalg.cross(camera_direction, camera_right)
+    camera_front: engine.Vec3 = {0,0,-1}
 
     view_matrix = linalg.MATRIX4F32_IDENTITY
     
@@ -315,9 +298,6 @@ main :: proc() {
            camera_pos + camera_front,
            camera_up
         )
-        // up_vec: Vec3 = {0.5, 1, 0}
-        quad.model_mat = linalg.matrix4_rotate(f32(glfw.GetTime()) * math.to_radians(f32(50)), world_up)
-
         cube_test_update(dummy_cube)
 
         // :rendering
@@ -330,15 +310,7 @@ main :: proc() {
             gl.PolygonMode(gl.FRONT_AND_BACK, gl.FILL)
         }
 
-        //quad_draw(quad, triangle_shader, &view_matrix, &projection, triangles_color)
-        //quad_draw(second_quad, triangle_shader, &view_matrix, &projection, triangles_color)
-
-        // for q in dummy_cube.quads {
-        //     if q != nil {
-        //         quad_draw(q, triangle_shader, &view_matrix, &projection, triangles_color)
-        //     }
-        // }
-        mesh_draw(dummy_cube.mesh, triangle_shader, &view_matrix, &projection, triangles_color)
+        engine.mesh_draw(dummy_cube.mesh, triangle_shader, &view_matrix, &projection, triangles_color)
 
         // ---- IMGUI RENDER
         imgui.begin("test panel", &tool_bar_open, imgui.Window_Flags{imgui.Window_Flag.Menu_Bar})
