@@ -1,0 +1,3 @@
+procs com "c nao recebem o context implicito de odin
+
+proc #type é o equivalente a definir o signiature de um type de proc

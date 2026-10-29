@@ -19,34 +19,11 @@ import imgui_glfw "odin-imgui/imgui_impl_glfw"
 
 
 EngineState :: struct {
-    window: glfw.WindowHandle
+    window: glfw.WindowHandle,
+    main_camera: ^engine.Camera
 }
 
 engine_state: EngineState
-
-// Camera :: struct {
-//     position: Vec3, // where the camera iss
-//     direction: Vec3, // direciton is usually actually the opposite direction to where we are looking at necause the camera points to -z
-//     in learnopengl you see that the target is the origin (vector 0,0,0) and the direction turns ou to point back to the camera
-
-//     target: Vect3 // where we wanna look at
-
-//     // pointing directions
-//     right: Vec3, // positive x of the camera space, to get it we first define the up vector in world space and cross it with the target, cross vector generates another vector perpendicular to those
-//     up: Vec3,
-//     forward: Vec3 // usually -Z, like godot
-
-//     // matrices
-//     view_mat: Mat4,
-//     projection_mat: Mat4,
-//     model: Mat4,
-// }
-
-// camera_create :: proc() -> ^Camera {
-//     new_camera: Camera = {
-//         right
-//     }
-// }
 
 CubeTest :: struct {
     // quads: [6]^Quad,
@@ -54,6 +31,10 @@ CubeTest :: struct {
     position: engine.Vec3,
     rotation: engine.Vec3
 }
+
+lastMouseX : f64 = 400
+lastMouseY : f64 = 300
+mouse_captured: bool = true
 
 cube_test_create :: proc(position: engine.Vec3) -> ^CubeTest {
     // 8 cantos do cubo:
@@ -157,13 +138,6 @@ cube_test_update :: proc(cube: ^CubeTest) {
 main :: proc() {
     stb_image.set_flip_vertically_on_load(1)
 
-    // quad_vertices: []f32 = {
-    //     // positions          // colors           // texture coords
-    //     0.5,  0.5, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   // top right
-    //     0.5, -0.5, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   // bottom right
-    //     -0.5, -0.5, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   // bottom left
-    //     -0.5,  0.5, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0    // top left 
-    // }
     quad_vertices: []f32 = {
         // positions          // texture coords
         0.5,  0.5, 0.0,      1.0, 1.0,   // top right
@@ -177,13 +151,6 @@ main :: proc() {
         1, 2, 3  // second triangle
     }
 
-    // quad_tex_coords: []f32 = {
-    //     1.0, 1.0, // top right
-    //     1.0, 0.0, // bottom right
-    //     0.0, 0.0, // bottom left
-    //     0.0, 1.0  // top left
-    // }
-
     wireframe: bool = false
     triangles_color: [3]f32 = {0,0,0}
     
@@ -196,8 +163,9 @@ main :: proc() {
     imgui.CHECKVERSION()
     imgui.create_context()
     io := imgui.get_io()
-    io.config_flags |= {.Nav_Enable_Keyboard}
+    io.config_flags |= {.Nav_Enable_Keyboard, .No_Mouse_Cursor_Change} // no cursor makes the glfw the source of truth, not imgui
     io.config_flags |= {.Docking_Enable}
+    // if io.want_capture_mouse can be checked to check if mouse is on imgui
     
     // imgui.open
     imgui_glfw.init_for_open_gl(engine_state.window, true)
@@ -227,21 +195,13 @@ main :: proc() {
     engine.shader_set_int(triangle_shader, "ourTexture", 0)
     // shader_set_int(triangle_shader, "awesomeTexture", 1)
 
-    camera_pos: engine.Vec3 = {0, 0, 3}
-    camera_target : engine.Vec3 = {0,0,0}
-    camera_direction: engine.Vec3 = linalg.normalize(camera_pos - camera_target)
-    world_up : engine.Vec3 = {0, 1, 0}
-    camera_right : engine.Vec3 = linalg.normalize(linalg.cross(world_up, camera_direction))
-    camera_up: engine.Vec3 = linalg.cross(camera_direction, camera_right)
-    camera_front: engine.Vec3 = {0,0,-1}
+    engine_state.main_camera = engine.camera_create_perspective(engine.Vec3{0,1,0})
+    defer free(engine_state.main_camera)
 
     view_matrix = linalg.MATRIX4F32_IDENTITY
     
     delta_time: f64
     last_frame: f64
-
-    camera_pitch: f32 = 0
-    camera_yaw: f32 = -90 // default looking towards -z
     
     for !glfw.WindowShouldClose(engine_state.window){
         current_frame := glfw.GetTime()
@@ -264,39 +224,34 @@ main :: proc() {
         }
         
         if glfw.GetKey(engine_state.window, glfw.KEY_W) == glfw.PRESS {
-            camera_pos += camera_speed * camera_front
+            engine_state.main_camera.position += camera_speed * engine_state.main_camera.forward
         }
         if glfw.GetKey(engine_state.window, glfw.KEY_S) == glfw.PRESS {
-            camera_pos -= camera_speed * camera_front
+            engine_state.main_camera.position -= camera_speed * engine_state.main_camera.forward
         }
         if glfw.GetKey(engine_state.window, glfw.KEY_A) == glfw.PRESS {
-            camera_pos += camera_speed * camera_right
+            engine_state.main_camera.position -= camera_speed * engine_state.main_camera.right
         }
         if glfw.GetKey(engine_state.window, glfw.KEY_D) == glfw.PRESS {
-            camera_pos -= camera_speed * camera_right
+            engine_state.main_camera.position += camera_speed * engine_state.main_camera.right
         }
 
-        // rotate camera
-        if glfw.GetKey(engine_state.window, glfw.KEY_E) == glfw.PRESS {
-            camera_yaw += camera_speed
-        }
-        if glfw.GetKey(engine_state.window, glfw.KEY_Q) == glfw.PRESS {
-            camera_yaw -= camera_speed
+        if glfw.GetKey(engine_state.window, glfw.KEY_TAB) == glfw.PRESS {
+            mouse_captured = !mouse_captured
+            glfw.SetInputMode(engine_state.window, glfw.CURSOR, mouse_captured ? glfw.CURSOR_DISABLED : glfw.CURSOR_NORMAL)
         }
 
-         
-        camera_direction.x = math.cos(linalg.to_radians(camera_yaw)) * math.cos(linalg.to_radians(camera_pitch))
-        camera_direction.y = math.sin(linalg.to_radians(camera_pitch))
-        camera_direction.z = math.sin(linalg.to_radians(camera_yaw)) * math.cos(linalg.to_radians(camera_pitch))
-        camera_front = linalg.normalize(camera_direction)
-        // must recalculate after chanfing camera_front
-        camera_right = linalg.normalize(linalg.cross(camera_front, world_up))
-        camera_up = linalg.cross(camera_direction, camera_right)
+       
+        
+        
+        // must recalculate after chanfing engine_state.main_camera.forward
+        engine_state.main_camera.right = linalg.normalize(linalg.cross(engine_state.main_camera.forward, engine.Vec3{0,1,0}))
+        engine_state.main_camera.up = linalg.cross(engine_state.main_camera.right, engine_state.main_camera.forward)
         
         view_matrix = linalg.matrix4_look_at(
-           camera_pos,
-           camera_pos + camera_front,
-           camera_up
+           engine_state.main_camera.position,
+           engine_state.main_camera.position + engine_state.main_camera.forward,
+           engine_state.main_camera.up
         )
         cube_test_update(dummy_cube)
 
@@ -373,11 +328,14 @@ engine_init :: proc() {
         glfw.Terminate();
         return
     }
+
+    glfw.SetCursorPosCallback(engine_state.window, glfw_mouse_callback)
     
     glfw.MakeContextCurrent(engine_state.window)
     gl.load_up_to(int(3), 3, glfw.gl_set_proc_address) 
     gl.Viewport(0,0, 800, 600)
     gl.Enable(gl.DEPTH_TEST)
+    glfw.SetInputMode(engine_state.window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 }
 
 engine_cleanup :: proc() {
@@ -387,4 +345,28 @@ engine_cleanup :: proc() {
 
     glfw.DestroyWindow(engine_state.window)
     glfw.Terminate()
+}
+
+// CursorPosProc é uma definicao de metodo com o #type
+glfw_mouse_callback :: proc "c" (window: glfw.WindowHandle, mouse_x_pos: f64, mouse_y_pos: f64) {
+    context = runtime.default_context()
+
+    x_offset: f64 = mouse_x_pos - lastMouseX
+    y_offset: f64 = lastMouseY - mouse_y_pos // reversed since y-coordinates range from bottom to to
+    lastMouseX = mouse_x_pos
+    lastMouseY = mouse_y_pos
+
+    sensi: f64 = 0.01
+    x_offset *= sensi
+    y_offset *= sensi
+    
+    engine_state.main_camera.yaw += f32(x_offset)// precision loss
+    engine_state.main_camera.pitch += f32(y_offset)
+    
+    engine_state.main_camera.direction.x = math.cos(linalg.to_radians(engine_state.main_camera.yaw)) * math.cos(linalg.to_radians(engine_state.main_camera.pitch))
+    engine_state.main_camera.direction.y = math.sin(linalg.to_radians(engine_state.main_camera.pitch))
+    engine_state.main_camera.direction.z = math.sin(linalg.to_radians(engine_state.main_camera.yaw)) * math.cos(linalg.to_radians(engine_state.main_camera.pitch))
+    engine_state.main_camera.forward = linalg.normalize(engine_state.main_camera.direction)
+
+    // fmt.println(x_offset, y_offset, engine_state.main_camera.yaw)
 }
