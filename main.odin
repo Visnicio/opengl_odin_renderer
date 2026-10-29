@@ -193,6 +193,7 @@ main :: proc() {
     engine_init()
     
     // ---- IMGUI
+    tool_bar_open: bool = true
     imgui.CHECKVERSION()
     imgui.create_context()
     io := imgui.get_io()
@@ -340,7 +341,20 @@ main :: proc() {
         mesh_draw(dummy_cube.mesh, triangle_shader, &view_matrix, &projection, triangles_color)
 
         // ---- IMGUI RENDER
-        imgui.begin("test panel")
+        imgui.begin("test panel", &tool_bar_open, imgui.Window_Flags{imgui.Window_Flag.Menu_Bar})
+
+        if imgui.begin_menu_bar()
+        {
+            if imgui.begin_menu("File")
+            {
+                if imgui.menu_item("Open..", "Ctrl+O") { /* Do stuff */ }
+                if imgui.menu_item("Save", "Ctrl+S")   { /* Do stuff */ }
+                if imgui.menu_item("Close", "Ctrl+W")  { wireframe = !wireframe }
+                imgui.end_menu();
+            }
+            imgui.end_menu_bar();
+        }
+
         imgui.color_picker3("triangle colors", &triangles_color)
         if imgui.button("Wireframe") {
             wireframe = !wireframe

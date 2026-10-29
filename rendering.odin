@@ -277,9 +277,9 @@ mesh_draw :: proc(mesh: ^Mesh, mesh_shader: ^Shader, view_matrix: ^Mat4, project
     mesh.model_mat = linalg.matrix4_translate(mesh.position)
 
     // rotation
-    mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.z), Vec3{0,0,1}) // roll
     mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.x), Vec3{1,0,0}) // pitch
     mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.y), Vec3{0,1,0}) // yaw
+    mesh.model_mat *= linalg.matrix4_rotate(linalg.to_radians(mesh.rotation.z), Vec3{0,0,1}) // roll
 
     gl.UseProgram(mesh_shader.shader_program)
     shader_set_uniform4f(mesh_shader, "ourColor", color)
